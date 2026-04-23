@@ -1,0 +1,33 @@
+import { QuoteForm } from "@/components/quote/quote-form";
+import { buildDraftQuote } from "@/domain/quote.defaults";
+import { quoteService } from "@/server/quote-service";
+
+export const dynamic = "force-dynamic";
+
+export default async function NewQuotePage() {
+  let draft = buildDraftQuote(1);
+  let loadError = "";
+
+  try {
+    draft = await quoteService.createDraft();
+  } catch (error) {
+    loadError = error instanceof Error ? error.message : "Falha ao montar rascunho inicial.";
+  }
+
+  return (
+    <main className="flex-1">
+      <header className="mx-auto w-full max-w-7xl px-4 pt-8 md:px-8">
+        <h1 className="font-heading text-3xl font-semibold tracking-tight">Novo Orcamento</h1>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Orbicom - Gestao comercial de ponta a ponta. Preencha os dados para gerar a proposta.
+        </p>
+      </header>
+      {loadError ? (
+        <p className="mx-auto mt-4 w-full max-w-7xl rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive md:px-8">
+          {loadError}
+        </p>
+      ) : null}
+      <QuoteForm key={draft.quoteNumber} mode="create" initialQuote={draft} />
+    </main>
+  );
+}
