@@ -13,7 +13,7 @@ const encodeMessage = (value: string) => encodeURIComponent(value);
 export async function signInAction(formData: FormData) {
   const email = String(formData.get("email") ?? "").trim();
   const password = String(formData.get("password") ?? "");
-  const next = String(formData.get("next") ?? "/orcamentos");
+  const next = String(formData.get("next") ?? "/dashboard");
 
   if (!email || !password) {
     redirect(`/auth/login?message=${encodeMessage("Informe email e senha.")}`);
@@ -26,7 +26,7 @@ export async function signInAction(formData: FormData) {
     redirect(`/auth/login?message=${encodeMessage(toErrorMessage(error, "Falha ao entrar."))}`);
   }
 
-  redirect(next.startsWith("/") ? next : "/orcamentos");
+  redirect(next.startsWith("/") ? next : "/dashboard");
 }
 
 export async function signUpAction(formData: FormData) {
@@ -45,7 +45,7 @@ export async function signUpAction(formData: FormData) {
     email,
     password,
     options: {
-      emailRedirectTo: `${origin}/auth/confirm?next=/orcamentos`,
+      emailRedirectTo: `${origin}/auth/confirm?next=/dashboard`,
     },
   });
 

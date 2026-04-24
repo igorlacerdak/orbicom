@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Plus, PencilLine } from "lucide-react";
 
+import { AppShell } from "@/components/layout/app-shell";
 import { Quote } from "@/domain/quote.types";
 import { formatCurrency, formatDate } from "@/lib/formatters";
 import { Button } from "@/components/ui/button";
@@ -22,7 +23,8 @@ export default async function QuotesPage() {
   }
 
   return (
-    <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 px-4 pb-10 pt-8 md:px-8">
+    <AppShell>
+      <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 px-4 pb-10 pt-8 md:px-8">
       <section className="relative overflow-hidden rounded-2xl border border-border/70 bg-card p-6 shadow-sm">
         <div className="pointer-events-none absolute -left-10 -top-12 h-44 w-44 rounded-full bg-primary/10 blur-2xl" />
         <div className="pointer-events-none absolute -bottom-12 right-0 h-52 w-52 rounded-full bg-accent/20 blur-3xl" />
@@ -91,6 +93,7 @@ export default async function QuotesPage() {
           )}
         </CardContent>
       </Card>
-    </main>
+      </main>
+    </AppShell>
   );
 }

@@ -21,11 +21,11 @@ export default async function LoginPage({ searchParams }: PageProps) {
       <Card className="mx-auto w-full max-w-md border-border/70 bg-card/95 shadow-sm backdrop-blur-sm">
         <CardHeader>
           <CardTitle className="text-2xl">Entrar</CardTitle>
-          <CardDescription>Use seu email e senha para acessar seus orcamentos.</CardDescription>
+          <CardDescription>Use seu email e senha para acessar seu painel comercial.</CardDescription>
         </CardHeader>
         <CardContent>
           <form action={signInAction} className="space-y-4">
-            <input type="hidden" name="next" value={next ?? "/orcamentos"} />
+            <input type="hidden" name="next" value={next ?? "/dashboard"} />
 
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>

@@ -1,4 +1,5 @@
 import { QuoteForm } from "@/components/quote/quote-form";
+import { AppShell } from "@/components/layout/app-shell";
 import { buildDraftQuote } from "@/domain/quote.defaults";
 import { quoteService } from "@/server/quote-service";
 
@@ -15,19 +16,21 @@ export default async function NewQuotePage() {
   }
 
   return (
-    <main className="flex-1">
-      <header className="mx-auto w-full max-w-7xl px-4 pt-8 md:px-8">
-        <h1 className="font-heading text-3xl font-semibold tracking-tight">Novo Orcamento</h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Orbicom - Gestao comercial de ponta a ponta. Preencha os dados para gerar a proposta.
-        </p>
-      </header>
-      {loadError ? (
-        <p className="mx-auto mt-4 w-full max-w-7xl rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive md:px-8">
-          {loadError}
-        </p>
-      ) : null}
-      <QuoteForm key={draft.quoteNumber} mode="create" initialQuote={draft} />
-    </main>
+    <AppShell>
+      <main className="flex-1">
+        <header className="mx-auto w-full max-w-7xl px-4 pt-8 md:px-8">
+          <h1 className="font-heading text-3xl font-semibold tracking-tight">Novo Orcamento</h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Orbicom - Gestao comercial de ponta a ponta. Preencha os dados para gerar a proposta.
+          </p>
+        </header>
+        {loadError ? (
+          <p className="mx-auto mt-4 w-full max-w-7xl rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive md:px-8">
+            {loadError}
+          </p>
+        ) : null}
+        <QuoteForm key={draft.quoteNumber} mode="create" initialQuote={draft} />
+      </main>
+    </AppShell>
   );
 }

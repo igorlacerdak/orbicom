@@ -42,7 +42,11 @@ export const updateSession = async (request: NextRequest) => {
   } = await supabase.auth.getUser();
 
   const isAuthRoute = pathname.startsWith("/auth");
-  const isProtectedPage = pathname === "/" || pathname.startsWith("/orcamentos");
+  const isProtectedPage =
+    pathname === "/" ||
+    pathname.startsWith("/dashboard") ||
+    pathname.startsWith("/orcamentos") ||
+    pathname.startsWith("/clientes");
   const isProtectedApi =
     pathname.startsWith("/api/quotes") || pathname.startsWith("/api/companies") || pathname.startsWith("/api/clients");
 
@@ -56,8 +60,8 @@ export const updateSession = async (request: NextRequest) => {
     return NextResponse.redirect(loginUrl);
   }
 
-  if (user && isAuthRoute && !pathname.startsWith("/auth/confirm")) {
-    return NextResponse.redirect(new URL("/orcamentos", request.url));
+  if (user && isAuthRoute && !pathname.startsWith("/auth/confirm") && !pathname.startsWith("/auth/sign-out")) {
+    return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 
   return response;
