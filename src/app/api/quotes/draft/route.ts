@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
-import { quoteService, UnauthorizedError } from "@/server/quote-service";
+import { UnauthorizedError } from "@/server/errors";
+import { quoteService } from "@/server/quote-service";
 
 export async function GET() {
   try {

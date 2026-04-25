@@ -84,7 +84,7 @@ export type Database = {
           tax_amount: number;
           total: number;
           notes: string;
-          status: string;
+          status: "draft" | "sent" | "approved" | "rejected" | "converted";
           created_at: string;
           updated_at: string;
         };
@@ -104,7 +104,7 @@ export type Database = {
           tax_amount: number;
           total: number;
           notes: string;
-          status?: string;
+          status?: "draft" | "sent" | "approved" | "rejected" | "converted";
           created_at?: string;
           updated_at?: string;
         };
@@ -115,6 +115,7 @@ export type Database = {
         Row: {
           id: string;
           quote_id: string;
+          catalog_item_id: string | null;
           code: string;
           name: string;
           unit: "UN" | "KG" | "TON";
@@ -127,6 +128,7 @@ export type Database = {
         Insert: {
           id?: string;
           quote_id: string;
+          catalog_item_id?: string | null;
           code: string;
           name: string;
           unit: "UN" | "KG" | "TON";
@@ -137,6 +139,158 @@ export type Database = {
           created_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["quote_items"]["Insert"]>;
+        Relationships: [];
+      };
+      catalog_items: {
+        Row: {
+          id: string;
+          owner_id: string;
+          code: string;
+          name: string;
+          type: "product" | "service";
+          unit: "UN" | "KG" | "TON";
+          default_unit_price: number;
+          allow_custom_description: boolean;
+          active: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          owner_id: string;
+          code: string;
+          name: string;
+          type: "product" | "service";
+          unit: "UN" | "KG" | "TON";
+          default_unit_price?: number;
+          allow_custom_description?: boolean;
+          active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["catalog_items"]["Insert"]>;
+        Relationships: [];
+      };
+      user_settings: {
+        Row: {
+          owner_id: string;
+          company_name: string;
+          company_document: string;
+          company_state_registration: string;
+          company_phone: string;
+          company_address: string;
+          company_zip_code: string;
+          company_city: string;
+          company_state: string;
+          company_logo_url: string | null;
+          default_discount_type: "fixed" | "percent";
+          default_discount_value: number;
+          default_freight: number;
+          default_tax_rate: number;
+          default_validity_days: number;
+          default_notes: string;
+          quote_prefix: string;
+          quote_sequence: number;
+          order_prefix: string;
+          order_sequence: number;
+          onboarding_completed_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          owner_id: string;
+          company_name?: string;
+          company_document?: string;
+          company_state_registration?: string;
+          company_phone?: string;
+          company_address?: string;
+          company_zip_code?: string;
+          company_city?: string;
+          company_state?: string;
+          company_logo_url?: string | null;
+          default_discount_type?: "fixed" | "percent";
+          default_discount_value?: number;
+          default_freight?: number;
+          default_tax_rate?: number;
+          default_validity_days?: number;
+          default_notes?: string;
+          quote_prefix?: string;
+          quote_sequence?: number;
+          order_prefix?: string;
+          order_sequence?: number;
+          onboarding_completed_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["user_settings"]["Insert"]>;
+        Relationships: [];
+      };
+      orders: {
+        Row: {
+          id: string;
+          owner_id: string;
+          order_number: string;
+          issue_date: string;
+          company_id: string;
+          client_id: string;
+          source_quote_id: string | null;
+          status: "open" | "processing" | "completed" | "cancelled";
+          subtotal: number;
+          discount_amount: number;
+          freight: number;
+          tax_amount: number;
+          total: number;
+          notes: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          owner_id: string;
+          order_number: string;
+          issue_date: string;
+          company_id: string;
+          client_id: string;
+          source_quote_id?: string | null;
+          status?: "open" | "processing" | "completed" | "cancelled";
+          subtotal: number;
+          discount_amount: number;
+          freight: number;
+          tax_amount: number;
+          total: number;
+          notes: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["orders"]["Insert"]>;
+        Relationships: [];
+      };
+      order_items: {
+        Row: {
+          id: string;
+          order_id: string;
+          code: string;
+          name: string;
+          unit: "UN" | "KG" | "TON";
+          quantity: number;
+          unit_price: number;
+          line_total: number;
+          position: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          order_id: string;
+          code: string;
+          name: string;
+          unit: "UN" | "KG" | "TON";
+          quantity: number;
+          unit_price: number;
+          line_total: number;
+          position: number;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["order_items"]["Insert"]>;
         Relationships: [];
       };
     };

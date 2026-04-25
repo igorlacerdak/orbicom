@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { IBM_Plex_Mono, Manrope } from "next/font/google";
 
 // import { AppHeader } from "@/components/layout/app-header";
+import { AppTopLoader } from "@/components/layout/app-top-loader";
 import { ThemeProvider } from "@/components/theme/theme-provider";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
@@ -37,6 +38,7 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col">
         <ThemeProvider>
           <TooltipProvider>
+            <AppTopLoader />
             {/* Header global desativado: usamos apenas o header do AppShell */}
             {/* <AppHeader isAuthenticated={false} /> */}
             {children}

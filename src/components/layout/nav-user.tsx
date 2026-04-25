@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter } from "nextjs-toploader/app";
 import { ChevronUp, LayoutDashboard, LogOut, Settings } from "lucide-react";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -70,7 +70,7 @@ export function NavUser({ name, email, avatarUrl }: NavUserProps) {
                 <LayoutDashboard data-icon="inline-start" />
                 Dashboard
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => router.push("/dashboard")}>
+              <DropdownMenuItem onClick={() => router.push("/onboarding")}>
                 <Settings data-icon="inline-start" />
                 Configuracoes
               </DropdownMenuItem>

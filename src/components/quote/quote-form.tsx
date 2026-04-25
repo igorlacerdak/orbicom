@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter } from 'nextjs-toploader/app';
 import { useMemo, useState } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Save, FileDown, ArrowLeft } from 'lucide-react';
@@ -10,6 +10,7 @@ import { useFieldArray, useForm, useWatch } from 'react-hook-form';
 import { calculateQuoteTotals } from '@/domain/quote.calculations';
 import { buildDraftQuote } from '@/domain/quote.defaults';
 import { QuoteFormInput, quoteFormSchema } from '@/domain/quote.schema';
+import { CatalogItem } from '@/domain/catalog.types';
 import { Quote } from '@/domain/quote.types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -26,6 +27,7 @@ import { buildDefaultQuoteNotes } from '@/lib/quote-notes';
 type QuoteFormProps = {
   initialQuote?: Quote;
   mode: 'create' | 'edit';
+  initialCatalogItems?: CatalogItem[];
 };
 
 const quoteToFormInput = (quote: Quote): QuoteFormInput => ({
@@ -53,9 +55,11 @@ const buildQuotePayload = (values: QuoteFormInput): QuoteFormInput => ({
   notes: values.notes ?? '',
 });
 
-export const QuoteForm = ({ initialQuote, mode }: QuoteFormProps) => {
+export const QuoteForm = ({ initialQuote, mode, initialCatalogItems = [] }: QuoteFormProps) => {
   const router = useRouter();
   const [notice, setNotice] = useState('');
+  const [pdfLoading, setPdfLoading] = useState(false);
+  const [catalogItems] = useState<CatalogItem[]>(initialCatalogItems);
 
   const initialValues = useMemo<QuoteFormInput>(() => {
     if (initialQuote) {
@@ -84,6 +88,7 @@ export const QuoteForm = ({ initialQuote, mode }: QuoteFormProps) => {
     () =>
       (watchedData.items ?? []).map((item) => ({
         id: item.id ?? crypto.randomUUID(),
+        catalogItemId: item.catalogItemId,
         code: item.code ?? '',
         name: item.name ?? '',
         unitPrice: item.unitPrice ?? 0,
@@ -175,12 +180,15 @@ export const QuoteForm = ({ initialQuote, mode }: QuoteFormProps) => {
   };
 
   const onGeneratePdf = async (values: QuoteFormInput) => {
+    setPdfLoading(true);
     try {
       const savedQuote = await persistQuote(values);
       window.open(`/api/quotes/${savedQuote.id}/pdf`, '_blank', 'noopener,noreferrer');
       setNotice('PDF gerado com sucesso.');
     } catch (error) {
       setNotice(error instanceof Error ? error.message : 'Falha ao gerar PDF.');
+    } finally {
+      setPdfLoading(false);
     }
   };
 
@@ -217,15 +225,16 @@ export const QuoteForm = ({ initialQuote, mode }: QuoteFormProps) => {
               Voltar
             </Button>
           </Link>
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={handleSubmit(onGeneratePdf)}
-          >
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={formState.isSubmitting || pdfLoading}
+              onClick={handleSubmit(onGeneratePdf)}
+            >
             <FileDown />
             Gerar PDF
           </Button>
-          <Button type="submit" disabled={formState.isSubmitting}>
+          <Button type="submit" disabled={formState.isSubmitting || pdfLoading}>
             <Save />
             Salvar orcamento
           </Button>
@@ -268,6 +277,9 @@ export const QuoteForm = ({ initialQuote, mode }: QuoteFormProps) => {
       <ItemsTable
         itemCount={fields.length}
         register={register}
+        setValue={setValue}
+        items={watchedData.items ?? []}
+        catalogItems={catalogItems}
         errors={formState.errors}
         append={append}
         remove={remove}

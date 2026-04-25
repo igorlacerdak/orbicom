@@ -2,6 +2,7 @@ export const MEASUREMENT_UNITS = ["UN", "KG", "TON"] as const;
 
 export type MeasurementUnit = (typeof MEASUREMENT_UNITS)[number];
 export type DiscountType = "fixed" | "percent";
+export type QuoteStatus = "draft" | "sent" | "approved" | "rejected" | "converted";
 
 export type PartyData = {
   name: string;
@@ -17,6 +18,7 @@ export type PartyData = {
 
 export type QuoteItem = {
   id: string;
+  catalogItemId?: string;
   code: string;
   name: string;
   unitPrice: number;
@@ -41,6 +43,7 @@ export type QuoteTotals = {
 
 export type Quote = {
   id: string;
+  status: QuoteStatus;
   quoteNumber: string;
   createdAt: string;
   updatedAt: string;

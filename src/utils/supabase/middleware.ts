@@ -42,13 +42,22 @@ export const updateSession = async (request: NextRequest) => {
   } = await supabase.auth.getUser();
 
   const isAuthRoute = pathname.startsWith("/auth");
+  const isOnboardingRoute = pathname.startsWith("/onboarding");
   const isProtectedPage =
     pathname === "/" ||
+    pathname.startsWith("/onboarding") ||
     pathname.startsWith("/dashboard") ||
     pathname.startsWith("/orcamentos") ||
-    pathname.startsWith("/clientes");
+    pathname.startsWith("/clientes") ||
+    pathname.startsWith("/catalogo") ||
+    pathname.startsWith("/pedidos");
   const isProtectedApi =
-    pathname.startsWith("/api/quotes") || pathname.startsWith("/api/companies") || pathname.startsWith("/api/clients");
+    pathname.startsWith("/api/quotes") ||
+    pathname.startsWith("/api/companies") ||
+    pathname.startsWith("/api/clients") ||
+    pathname.startsWith("/api/catalog") ||
+    pathname.startsWith("/api/orders") ||
+    pathname.startsWith("/api/settings");
 
   if (!user && (isProtectedPage || isProtectedApi)) {
     if (isProtectedApi) {
@@ -62,6 +71,24 @@ export const updateSession = async (request: NextRequest) => {
 
   if (user && isAuthRoute && !pathname.startsWith("/auth/confirm") && !pathname.startsWith("/auth/sign-out")) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
+  }
+
+  if (user && !isAuthRoute) {
+    const { data: settings } = await supabase
+      .from("user_settings")
+      .select("onboarding_completed_at")
+      .eq("owner_id", user.id)
+      .maybeSingle();
+
+    const onboardingCompleted = Boolean(settings?.onboarding_completed_at);
+
+    if (!onboardingCompleted && !isOnboardingRoute && !pathname.startsWith("/api/settings")) {
+      return NextResponse.redirect(new URL("/onboarding", request.url));
+    }
+
+    if (onboardingCompleted && isOnboardingRoute) {
+      return NextResponse.redirect(new URL("/dashboard", request.url));
+    }
   }
 
   return response;

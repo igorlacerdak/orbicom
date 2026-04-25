@@ -30,6 +30,7 @@ export const defaultClient: PartyData = {
 
 export const defaultItem = (): QuoteItem => ({
   id: crypto.randomUUID(),
+  catalogItemId: undefined,
   code: '',
   name: '',
   unitPrice: 0,
@@ -54,6 +55,7 @@ export const buildDraftQuote = (nextIndex: number): Quote => {
 
   return {
     id: crypto.randomUUID(),
+    status: 'draft',
     quoteNumber: createQuoteNumber(nextIndex),
     createdAt: now,
     updatedAt: now,

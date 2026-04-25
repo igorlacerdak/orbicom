@@ -1,7 +1,8 @@
 import { pdf } from "@react-pdf/renderer";
 
 import { QuotePdfDocument } from "@/components/quote/quote-pdf-document";
-import { quoteService, UnauthorizedError } from "@/server/quote-service";
+import { UnauthorizedError } from "@/server/errors";
+import { quoteService } from "@/server/quote-service";
 
 type Context = {
   params: Promise<{ id: string }>;

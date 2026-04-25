@@ -4,16 +4,11 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { calculateItemTotal, calculateQuoteTotals } from "@/domain/quote.calculations";
 import { defaultClient, defaultCompany } from "@/domain/quote.defaults";
 import { QuoteFormInput } from "@/domain/quote.schema";
-import { Quote } from "@/domain/quote.types";
+import { Quote, QuoteStatus } from "@/domain/quote.types";
 import { buildDefaultQuoteNotes } from "@/lib/quote-notes";
+import { UnauthorizedError } from "@/server/errors";
+import { settingsService } from "@/server/settings-service";
 import { createClient } from "@/utils/supabase/server";
-
-export class UnauthorizedError extends Error {
-  constructor() {
-    super("Nao autenticado.");
-    this.name = "UnauthorizedError";
-  }
-}
 
 type DbClient = SupabaseClient<Database>;
 
@@ -47,12 +42,14 @@ type QuoteRow = {
   tax_amount: number;
   total: number;
   notes: string;
+  status: QuoteStatus;
   created_at: string;
   updated_at: string;
 };
 
 type QuoteItemRow = {
   id: string;
+  catalog_item_id: string | null;
   code: string;
   name: string;
   unit: "UN" | "KG" | "TON";
@@ -61,6 +58,16 @@ type QuoteItemRow = {
   line_total: number;
   position: number;
   quote_id: string;
+};
+
+type OrderInsert = Database["public"]["Tables"]["orders"]["Insert"];
+
+const quoteStatusTransitions: Record<QuoteStatus, QuoteStatus[]> = {
+  draft: ["sent", "rejected", "approved"],
+  sent: ["approved", "rejected", "draft"],
+  approved: ["converted", "rejected"],
+  rejected: ["draft", "sent"],
+  converted: [],
 };
 
 const toNumber = (value: number | string | null | undefined): number => Number(value ?? 0);
@@ -85,6 +92,7 @@ const mapQuote = (
   items: QuoteItemRow[],
 ): Quote => ({
   id: row.id,
+  status: row.status,
   quoteNumber: row.quote_number,
   issueDate: row.issue_date,
   createdAt: row.created_at,
@@ -95,6 +103,7 @@ const mapQuote = (
     .sort((a, b) => a.position - b.position)
     .map((item) => ({
       id: item.id,
+      catalogItemId: item.catalog_item_id ?? undefined,
       code: item.code,
       name: item.name,
       unit: item.unit,
@@ -118,13 +127,11 @@ const mapQuote = (
 });
 
 const quoteColumns =
-  "id,owner_id,quote_number,issue_date,company_id,client_id,discount_type,discount_value,freight,tax_rate,subtotal,discount_amount,tax_amount,total,notes,created_at,updated_at";
+  "id,owner_id,quote_number,issue_date,company_id,client_id,discount_type,discount_value,freight,tax_rate,subtotal,discount_amount,tax_amount,total,notes,status,created_at,updated_at";
 
 const companyColumns = "id,owner_id,name,document,state_registration,phone,address,zip_code,city,state,logo_url";
-
 const clientColumns = "id,owner_id,name,document,state_registration,phone,address,zip_code,city,state";
-
-const quoteItemColumns = "id,quote_id,code,name,unit,quantity,unit_price,line_total,position";
+const quoteItemColumns = "id,quote_id,catalog_item_id,code,name,unit,quantity,unit_price,line_total,position";
 
 const getAuthedSupabase = async (): Promise<{ supabase: DbClient; userId: string }> => {
   const supabase = await createClient();
@@ -243,29 +250,6 @@ const upsertClient = async (supabase: DbClient, userId: string, client: QuoteFor
   return data.id;
 };
 
-const nextQuoteNumber = async (supabase: DbClient, userId: string) => {
-  const year = new Date().getFullYear();
-
-  const { data, error } = await supabase
-    .from("quotes")
-    .select("quote_number")
-    .eq("owner_id", userId)
-    .like("quote_number", `ORC-${year}-%`)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  if (error) {
-    throw new Error(`Falha ao gerar numero do orcamento: ${error.message}`);
-  }
-
-  const latest = data?.quote_number;
-  const lastIndex = latest ? Number(latest.split("-")[2] ?? 0) : 0;
-  const nextIndex = Number.isFinite(lastIndex) ? lastIndex + 1 : 1;
-
-  return `ORC-${year}-${String(nextIndex).padStart(4, "0")}`;
-};
-
 const hydrateQuote = async (supabase: DbClient, userId: string, quoteId: string): Promise<Quote> => {
   const { data, error } = await supabase
     .from("quotes")
@@ -291,6 +275,7 @@ const persistItems = async (supabase: DbClient, quoteId: string, items: QuoteFor
 
   const rows = items.map((item, index) => ({
     quote_id: quoteId,
+    catalog_item_id: item.catalogItemId ?? null,
     code: item.code,
     name: item.name,
     unit: item.unit,
@@ -304,6 +289,106 @@ const persistItems = async (supabase: DbClient, quoteId: string, items: QuoteFor
   if (insertError) {
     throw new Error(`Falha ao salvar itens do orcamento: ${insertError.message}`);
   }
+};
+
+const assertTransition = (from: QuoteStatus, to: QuoteStatus) => {
+  if (!quoteStatusTransitions[from].includes(to)) {
+    throw new Error(`Transicao de status invalida: ${from} -> ${to}.`);
+  }
+};
+
+const getRowById = async (supabase: DbClient, userId: string, quoteId: string): Promise<QuoteRow> => {
+  const { data, error } = await supabase
+    .from("quotes")
+    .select(quoteColumns)
+    .eq("id", quoteId)
+    .eq("owner_id", userId)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`Falha ao carregar orcamento: ${error.message}`);
+  }
+
+  if (!data) {
+    throw new Error("Orcamento nao encontrado.");
+  }
+
+  return data as QuoteRow;
+};
+
+const convertQuoteToOrder = async (supabase: DbClient, userId: string, quote: QuoteRow): Promise<string> => {
+  const { data: existingOrder, error: existingError } = await supabase
+    .from("orders")
+    .select("id")
+    .eq("source_quote_id", quote.id)
+    .eq("owner_id", userId)
+    .maybeSingle();
+
+  if (existingError) {
+    throw new Error(`Falha ao verificar pedido existente: ${existingError.message}`);
+  }
+
+  if (existingOrder) {
+    return existingOrder.id;
+  }
+
+  const orderNumber = await settingsService.nextOrderNumber();
+
+  const orderPayload: OrderInsert = {
+    owner_id: userId,
+    order_number: orderNumber,
+    issue_date: quote.issue_date,
+    company_id: quote.company_id,
+    client_id: quote.client_id,
+    source_quote_id: quote.id,
+    status: "open",
+    subtotal: quote.subtotal,
+    discount_amount: quote.discount_amount,
+    freight: quote.freight,
+    tax_amount: quote.tax_amount,
+    total: quote.total,
+    notes: quote.notes,
+  };
+
+  const { data: insertedOrder, error: insertOrderError } = await supabase
+    .from("orders")
+    .insert(orderPayload)
+    .select("id")
+    .single();
+
+  if (insertOrderError) {
+    throw new Error(`Falha ao criar pedido: ${insertOrderError.message}`);
+  }
+
+  const { data: quoteItems, error: quoteItemsError } = await supabase
+    .from("quote_items")
+    .select("code,name,unit,quantity,unit_price,line_total,position")
+    .eq("quote_id", quote.id)
+    .order("position", { ascending: true });
+
+  if (quoteItemsError) {
+    throw new Error(`Falha ao carregar itens para conversao: ${quoteItemsError.message}`);
+  }
+
+  const orderItems = (quoteItems ?? []).map((item) => ({
+    order_id: insertedOrder.id,
+    code: item.code,
+    name: item.name,
+    unit: item.unit,
+    quantity: item.quantity,
+    unit_price: item.unit_price,
+    line_total: item.line_total,
+    position: item.position,
+  }));
+
+  if (orderItems.length > 0) {
+    const { error: orderItemsError } = await supabase.from("order_items").insert(orderItems);
+    if (orderItemsError) {
+      throw new Error(`Falha ao salvar itens do pedido: ${orderItemsError.message}`);
+    }
+  }
+
+  return insertedOrder.id;
 };
 
 export const quoteService = {
@@ -346,17 +431,29 @@ export const quoteService = {
   },
 
   async createDraft(): Promise<Quote> {
-    const { supabase, userId } = await getAuthedSupabase();
-    const quoteNumber = await nextQuoteNumber(supabase, userId);
+    const settings = await settingsService.get();
     const now = new Date().toISOString();
+    const quoteNumber = `${settings.quotePrefix}-${String(settings.quoteSequence).padStart(4, "0")}`;
 
     return {
       id: "",
+      status: "draft",
       quoteNumber,
       issueDate: now.slice(0, 10),
       createdAt: now,
       updatedAt: now,
-      company: defaultCompany,
+      company: {
+        ...defaultCompany,
+        name: settings.companyName || defaultCompany.name,
+        document: settings.companyDocument || defaultCompany.document,
+        stateRegistration: settings.companyStateRegistration || defaultCompany.stateRegistration,
+        phone: settings.companyPhone || defaultCompany.phone,
+        address: settings.companyAddress || defaultCompany.address,
+        zipCode: settings.companyZipCode || defaultCompany.zipCode,
+        city: settings.companyCity || defaultCompany.city,
+        state: settings.companyState || defaultCompany.state,
+        logoDataUrl: settings.companyLogoUrl || defaultCompany.logoDataUrl,
+      },
       client: defaultClient,
       items: [
         {
@@ -369,18 +466,18 @@ export const quoteService = {
         },
       ],
       adjustments: {
-        discountType: "fixed",
-        discountValue: 0,
-        freight: 0,
-        taxRate: 0,
+        discountType: settings.defaultDiscountType,
+        discountValue: settings.defaultDiscountValue,
+        freight: settings.defaultFreight,
+        taxRate: settings.defaultTaxRate,
       },
-      notes: buildDefaultQuoteNotes(0),
+      notes: settings.defaultNotes || buildDefaultQuoteNotes(0),
       totals: {
         subtotal: 0,
         discountAmount: 0,
-        freight: 0,
+        freight: settings.defaultFreight,
         taxAmount: 0,
-        total: 0,
+        total: settings.defaultFreight,
       },
     };
   },
@@ -391,7 +488,8 @@ export const quoteService = {
     const clientId = await upsertClient(supabase, userId, payload.client);
     const totals = calculateQuoteTotals(payload.items, payload.adjustments);
 
-    const number = payload.quoteNumber || (await nextQuoteNumber(supabase, userId));
+    const generatedNumber = await settingsService.nextQuoteNumber();
+    const number = payload.quoteNumber || generatedNumber;
 
     const { data, error } = await supabase
       .from("quotes")
@@ -410,6 +508,7 @@ export const quoteService = {
         tax_amount: totals.taxAmount,
         total: totals.total,
         notes: payload.notes,
+        status: "draft",
       })
       .select("id")
       .single();
@@ -455,5 +554,118 @@ export const quoteService = {
 
     await persistItems(supabase, quoteId, payload.items);
     return hydrateQuote(supabase, userId, quoteId);
+  },
+
+  async updateStatus(quoteId: string, status: QuoteStatus): Promise<Quote> {
+    const { supabase, userId } = await getAuthedSupabase();
+    const current = await getRowById(supabase, userId, quoteId);
+
+    if (current.status !== status) {
+      assertTransition(current.status, status);
+    }
+
+    const { error } = await supabase
+      .from("quotes")
+      .update({ status, updated_at: new Date().toISOString() })
+      .eq("id", quoteId)
+      .eq("owner_id", userId);
+
+    if (error) {
+      throw new Error(`Falha ao atualizar status: ${error.message}`);
+    }
+
+    return hydrateQuote(supabase, userId, quoteId);
+  },
+
+  async convertToOrder(quoteId: string): Promise<{ quote: Quote; orderId: string }> {
+    const { supabase, userId } = await getAuthedSupabase();
+    const current = await getRowById(supabase, userId, quoteId);
+
+    if (current.status !== "approved" && current.status !== "converted") {
+      throw new Error("Apenas orcamentos aprovados podem ser convertidos em pedido.");
+    }
+
+    const orderId = await convertQuoteToOrder(supabase, userId, current);
+
+    if (current.status !== "converted") {
+      const { error } = await supabase
+        .from("quotes")
+        .update({ status: "converted", updated_at: new Date().toISOString() })
+        .eq("id", quoteId)
+        .eq("owner_id", userId);
+
+      if (error) {
+        throw new Error(`Falha ao marcar orcamento como convertido: ${error.message}`);
+      }
+    }
+
+    return {
+      quote: await hydrateQuote(supabase, userId, quoteId),
+      orderId,
+    };
+  },
+
+  async duplicate(quoteId: string): Promise<Quote> {
+    const { supabase, userId } = await getAuthedSupabase();
+    const current = await getRowById(supabase, userId, quoteId);
+
+    const { data: sourceItems, error: sourceItemsError } = await supabase
+      .from("quote_items")
+      .select("catalog_item_id,code,name,unit,quantity,unit_price,line_total,position")
+      .eq("quote_id", quoteId)
+      .order("position", { ascending: true });
+
+    if (sourceItemsError) {
+      throw new Error(`Falha ao carregar itens para duplicacao: ${sourceItemsError.message}`);
+    }
+
+    const number = await settingsService.nextQuoteNumber();
+
+    const { data: created, error: createError } = await supabase
+      .from("quotes")
+      .insert({
+        owner_id: userId,
+        quote_number: number,
+        issue_date: new Date().toISOString().slice(0, 10),
+        company_id: current.company_id,
+        client_id: current.client_id,
+        discount_type: current.discount_type,
+        discount_value: current.discount_value,
+        freight: current.freight,
+        tax_rate: current.tax_rate,
+        subtotal: current.subtotal,
+        discount_amount: current.discount_amount,
+        tax_amount: current.tax_amount,
+        total: current.total,
+        notes: current.notes,
+        status: "draft",
+      })
+      .select("id")
+      .single();
+
+    if (createError) {
+      throw new Error(`Falha ao duplicar orcamento: ${createError.message}`);
+    }
+
+    const duplicatedItems = (sourceItems ?? []).map((item) => ({
+      quote_id: created.id,
+      catalog_item_id: item.catalog_item_id,
+      code: item.code,
+      name: item.name,
+      unit: item.unit,
+      quantity: item.quantity,
+      unit_price: item.unit_price,
+      line_total: item.line_total,
+      position: item.position,
+    }));
+
+    if (duplicatedItems.length > 0) {
+      const { error: insertItemsError } = await supabase.from("quote_items").insert(duplicatedItems);
+      if (insertItemsError) {
+        throw new Error(`Falha ao salvar itens duplicados: ${insertItemsError.message}`);
+      }
+    }
+
+    return hydrateQuote(supabase, userId, created.id);
   },
 };

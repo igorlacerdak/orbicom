@@ -1,11 +1,13 @@
 import { QuoteForm } from "@/components/quote/quote-form";
 import { AppShell } from "@/components/layout/app-shell";
 import { buildDraftQuote } from "@/domain/quote.defaults";
+import { catalogService } from "@/server/catalog-service";
 import { quoteService } from "@/server/quote-service";
 
 export const dynamic = "force-dynamic";
 
 export default async function NewQuotePage() {
+  const catalogItems = await catalogService.listForQuote();
   let draft = buildDraftQuote(1);
   let loadError = "";
 
@@ -29,7 +31,7 @@ export default async function NewQuotePage() {
             {loadError}
           </p>
         ) : null}
-        <QuoteForm key={draft.quoteNumber} mode="create" initialQuote={draft} />
+        <QuoteForm key={draft.quoteNumber} mode="create" initialQuote={draft} initialCatalogItems={catalogItems} />
       </main>
     </AppShell>
   );

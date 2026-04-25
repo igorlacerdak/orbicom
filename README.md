@@ -22,6 +22,10 @@ Frontend + backend em Next.js com persistencia em PostgreSQL (Supabase), geracao
 2. No SQL Editor, execute o script:
    - `packages/database/sql/001_init.sql`
    - `packages/database/sql/003_auth_per_user_rls.sql` (somente para banco ja existente)
+   - `packages/database/sql/004_user_settings.sql`
+   - `packages/database/sql/005_quote_status.sql`
+   - `packages/database/sql/006_orders.sql`
+   - `packages/database/sql/007_catalog_items.sql`
 3. Gere as credenciais em Project Settings > API.
 
 ## Variaveis de ambiente
@@ -72,8 +76,19 @@ As rotas abaixo exigem usuario autenticado (cookie de sessao Supabase).
 - `PUT /api/quotes/:id` - atualiza orcamento
 - `GET /api/quotes/:id/pdf` - gera PDF server-side
 - `GET /api/quotes/draft` - cria rascunho inicial
+- `PATCH /api/quotes/:id/status` - transicao de status do orcamento
+- `POST /api/quotes/:id/convert` - converte orcamento aprovado em pedido
+- `POST /api/quotes/:id/duplicate` - cria copia de um orcamento
 - `GET /api/companies` - lista empresas
 - `GET /api/clients` - lista clientes
+- `GET /api/orders` - lista pedidos
+- `GET /api/orders/:id` - detalhe do pedido
+- `GET /api/settings` - consulta configuracoes/onboarding
+- `PUT /api/settings` - salva configuracoes/onboarding
+- `GET /api/catalog/items` - lista itens de catalogo
+- `POST /api/catalog/items` - cria item de catalogo
+- `PUT /api/catalog/items/:id` - atualiza item de catalogo
+- `PATCH /api/catalog/items/:id/active` - ativa/inativa item de catalogo
 
 ## Deploy na Vercel
 

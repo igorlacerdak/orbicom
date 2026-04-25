@@ -19,7 +19,7 @@ export async function GET(request: Request) {
 
     let builder = supabase
       .from("clients")
-      .select("id,name,document,state_registration,phone,address,zip_code,city,state")
+      .select("id,name,document,state_registration,phone,address,zip_code,city,state,updated_at")
       .eq("owner_id", user.id)
       .order("name", { ascending: true });
 
@@ -33,7 +33,17 @@ export async function GET(request: Request) {
       throw error;
     }
 
-    return NextResponse.json({ data });
+    return NextResponse.json({
+      data: (data ?? []).map((row) => ({
+        id: row.id,
+        name: row.name,
+        document: row.document,
+        phone: row.phone,
+        city: row.city,
+        state: row.state,
+        updatedAt: row.updated_at,
+      })),
+    });
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Falha ao listar clientes." },

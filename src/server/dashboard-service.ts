@@ -1,4 +1,4 @@
-import { Quote } from "@/domain/quote.types";
+import { Quote, QuoteStatus } from "@/domain/quote.types";
 import { quoteService } from "@/server/quote-service";
 
 type TopClient = {
@@ -12,6 +12,8 @@ type DashboardSnapshot = {
   monthRevenue: number;
   averageTicket: number;
   quotesCount: number;
+  approvalRate: number;
+  statusCounts: Record<QuoteStatus, number>;
   topClients: TopClient[];
   recentQuotes: Quote[];
 };
@@ -33,6 +35,22 @@ export const dashboardService = {
     const monthRevenue = sum(quotes.filter((quote) => isCurrentMonth(quote.issueDate)).map((quote) => quote.totals.total));
     const quotesCount = quotes.length;
     const averageTicket = quotesCount > 0 ? totalRevenue / quotesCount : 0;
+    const statusCounts: Record<QuoteStatus, number> = {
+      draft: 0,
+      sent: 0,
+      approved: 0,
+      rejected: 0,
+      converted: 0,
+    };
+
+    for (const quote of quotes) {
+      statusCounts[quote.status] += 1;
+    }
+
+    const consideredForApproval =
+      statusCounts.sent + statusCounts.approved + statusCounts.rejected + statusCounts.converted;
+    const won = statusCounts.approved + statusCounts.converted;
+    const approvalRate = consideredForApproval > 0 ? (won / consideredForApproval) * 100 : 0;
 
     const topClientsMap = new Map<string, TopClient>();
     for (const quote of quotes) {
@@ -64,6 +82,8 @@ export const dashboardService = {
       monthRevenue,
       averageTicket,
       quotesCount,
+      approvalRate,
+      statusCounts,
       topClients,
       recentQuotes,
     };

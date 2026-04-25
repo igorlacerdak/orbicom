@@ -1,7 +1,9 @@
 import Link from "next/link";
-import { Plus, PencilLine } from "lucide-react";
+import { Plus } from "lucide-react";
 
 import { AppShell } from "@/components/layout/app-shell";
+import { QuoteStatusActions } from "@/components/quote/quote-status-actions";
+import { QuoteStatusBadge } from "@/components/quote/quote-status-badge";
 import { Quote } from "@/domain/quote.types";
 import { formatCurrency, formatDate } from "@/lib/formatters";
 import { Button } from "@/components/ui/button";
@@ -66,6 +68,7 @@ export default async function QuotesPage() {
                 <TableRow>
                   <TableHead>Numero</TableHead>
                   <TableHead>Cliente</TableHead>
+                  <TableHead>Status</TableHead>
                   <TableHead>Data</TableHead>
                   <TableHead>Total</TableHead>
                   <TableHead className="text-right">Acoes</TableHead>
@@ -76,15 +79,13 @@ export default async function QuotesPage() {
                   <TableRow key={quote.id}>
                     <TableCell>{quote.quoteNumber}</TableCell>
                     <TableCell>{quote.client.name}</TableCell>
+                    <TableCell>
+                      <QuoteStatusBadge status={quote.status} />
+                    </TableCell>
                     <TableCell>{formatDate(quote.issueDate)}</TableCell>
                     <TableCell>{formatCurrency(quote.totals.total)}</TableCell>
                     <TableCell className="text-right">
-                      <Link href={`/orcamentos/${quote.id}`} className="inline-flex">
-                        <Button type="button" size="sm" variant="outline">
-                          <PencilLine />
-                          Abrir
-                        </Button>
-                      </Link>
+                      <QuoteStatusActions quoteId={quote.id} status={quote.status} />
                     </TableCell>
                   </TableRow>
                 ))}

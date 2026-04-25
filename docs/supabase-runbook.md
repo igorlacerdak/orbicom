@@ -23,7 +23,11 @@ No painel Supabase:
 - Execute nesta ordem:
   1. `packages/database/sql/001_init.sql`
   2. `packages/database/sql/003_auth_per_user_rls.sql` (quando o banco ja existe)
-  3. `packages/database/sql/002_seed_sample.sql` (opcional)
+  3. `packages/database/sql/004_user_settings.sql`
+  4. `packages/database/sql/005_quote_status.sql`
+  5. `packages/database/sql/006_orders.sql`
+  6. `packages/database/sql/007_catalog_items.sql`
+  7. `packages/database/sql/002_seed_sample.sql` (opcional)
 
 ## 3) Configurar Auth no Supabase
 
@@ -51,6 +55,7 @@ Abrir:
 
 - `http://localhost:3000/orcamentos`
   - se nao estiver logado, voce sera redirecionado para `/auth/login`
+  - se nao tiver onboarding concluido, voce sera redirecionado para `/onboarding`
 
 ## 5) Testes manuais de API
 

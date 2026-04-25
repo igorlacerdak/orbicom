@@ -5,6 +5,7 @@ import { Control, Controller, UseFormRegister } from 'react-hook-form';
 import { QuoteFormInput } from '@/domain/quote.schema';
 import { QuoteTotals } from '@/domain/quote.types';
 import { formatCurrency } from '@/lib/formatters';
+import { formatSelectValue, selectLabelMaps } from '@/lib/select-labels';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -22,11 +23,6 @@ type TotalsCardProps = {
   totals: QuoteTotals;
 };
 
-const DISCOUNT_TYPE_LABEL: Record<QuoteFormInput["adjustments"]["discountType"], string> = {
-  fixed: "Valor fixo (R$)",
-  percent: "Percentual (%)",
-};
-
 export const TotalsCard = ({ control, register, totals }: TotalsCardProps) => {
   return (
     <Card className="border-border/70 bg-card/95 shadow-sm backdrop-blur-sm">
@@ -42,8 +38,8 @@ export const TotalsCard = ({ control, register, totals }: TotalsCardProps) => {
             render={({ field }) => (
               <Select value={field.value} onValueChange={field.onChange}>
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Selecione">
-                    {DISCOUNT_TYPE_LABEL[field.value]}
+                  <SelectValue>
+                    {formatSelectValue(selectLabelMaps.discountType, 'Selecione')}
                   </SelectValue>
                 </SelectTrigger>
                 <SelectContent>

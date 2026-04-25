@@ -18,6 +18,7 @@ const partySchema = z.object({
 
 const itemSchema = z.object({
   id: z.string().min(1),
+  catalogItemId: z.string().uuid().optional(),
   code: z.string().min(1, "Codigo obrigatorio"),
   name: z.string().min(2, "Nome obrigatorio"),
   unitPrice: numberField,

@@ -7,6 +7,14 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { formatCurrency, formatDate } from "@/lib/formatters";
 import { dashboardService } from "@/server/dashboard-service";
 
+const quoteStatusVariant = {
+  draft: "outline",
+  sent: "secondary",
+  approved: "default",
+  rejected: "destructive",
+  converted: "success",
+} as const;
+
 export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
@@ -53,6 +61,20 @@ export default async function DashboardPage() {
               <CardDescription>Total de orcamentos</CardDescription>
               <CardTitle className="text-2xl">{snapshot.quotesCount}</CardTitle>
             </CardHeader>
+          </Card>
+
+          <Card className="border-border/70 bg-card/95 shadow-sm md:col-span-2 xl:col-span-4">
+            <CardHeader className="pb-3">
+              <CardDescription>Taxa de aprovacao</CardDescription>
+              <CardTitle className="text-2xl">{snapshot.approvalRate.toFixed(1)}%</CardTitle>
+            </CardHeader>
+            <CardContent className="flex flex-wrap gap-2">
+              <Badge variant={quoteStatusVariant.draft}>Rascunho: {snapshot.statusCounts.draft}</Badge>
+              <Badge variant={quoteStatusVariant.sent}>Enviado: {snapshot.statusCounts.sent}</Badge>
+              <Badge variant={quoteStatusVariant.approved}>Aprovado: {snapshot.statusCounts.approved}</Badge>
+              <Badge variant={quoteStatusVariant.rejected}>Recusado: {snapshot.statusCounts.rejected}</Badge>
+              <Badge variant={quoteStatusVariant.converted}>Convertido: {snapshot.statusCounts.converted}</Badge>
+            </CardContent>
           </Card>
         </section>
 

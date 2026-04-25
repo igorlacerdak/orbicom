@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { BarChart3, Building2, FileText, Users } from 'lucide-react';
+import { BarChart3, Building2, ClipboardList, FileText, PackageSearch, Users } from 'lucide-react';
 
 import { NavUser } from '@/components/layout/nav-user';
 import {
@@ -42,6 +42,16 @@ const navigation = [
         title: 'Clientes',
         href: '/clientes',
         icon: Users,
+      },
+      {
+        title: 'Produtos/Servicos',
+        href: '/catalogo',
+        icon: PackageSearch,
+      },
+      {
+        title: 'Pedidos',
+        href: '/pedidos',
+        icon: ClipboardList,
       },
     ],
   },
