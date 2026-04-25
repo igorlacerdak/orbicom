@@ -3,8 +3,8 @@ import Link from "next/link";
 import { signUpAction } from "@/app/auth/actions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Field, FieldContent, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 
 type PageProps = {
   searchParams: Promise<{
@@ -23,16 +23,22 @@ export default async function SignUpPage({ searchParams }: PageProps) {
           <CardDescription>Crie seu acesso para salvar orcamentos com seguranca.</CardDescription>
         </CardHeader>
         <CardContent>
-          <form action={signUpAction} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input id="email" name="email" type="email" autoComplete="email" required />
-            </div>
+          <form action={signUpAction} className="flex flex-col gap-4">
+            <FieldGroup>
+              <Field>
+                <FieldLabel htmlFor="email">Email</FieldLabel>
+                <FieldContent>
+                  <Input id="email" name="email" type="email" autoComplete="email" required />
+                </FieldContent>
+              </Field>
 
-            <div className="space-y-2">
-              <Label htmlFor="password">Senha</Label>
-              <Input id="password" name="password" type="password" autoComplete="new-password" required />
-            </div>
+              <Field>
+                <FieldLabel htmlFor="password">Senha</FieldLabel>
+                <FieldContent>
+                  <Input id="password" name="password" type="password" autoComplete="new-password" required />
+                </FieldContent>
+              </Field>
+            </FieldGroup>
 
             {message ? (
               <p className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">

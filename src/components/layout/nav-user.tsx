@@ -70,7 +70,7 @@ export function NavUser({ name, email, avatarUrl }: NavUserProps) {
                 <LayoutDashboard data-icon="inline-start" />
                 Dashboard
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => router.push("/onboarding")}>
+              <DropdownMenuItem onClick={() => router.push("/configuracoes/acesso")}>
                 <Settings data-icon="inline-start" />
                 Configuracoes
               </DropdownMenuItem>

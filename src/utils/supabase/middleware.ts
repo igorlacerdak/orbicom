@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+const WORKSPACE_COOKIE = "orbicom_workspace_id";
 
 if (!supabaseUrl || !supabaseKey) {
   throw new Error(
@@ -46,6 +47,7 @@ export const updateSession = async (request: NextRequest) => {
   const isProtectedPage =
     pathname === "/" ||
     pathname.startsWith("/onboarding") ||
+    pathname.startsWith("/configuracoes") ||
     pathname.startsWith("/dashboard") ||
     pathname.startsWith("/orcamentos") ||
     pathname.startsWith("/clientes") ||
@@ -57,7 +59,8 @@ export const updateSession = async (request: NextRequest) => {
     pathname.startsWith("/api/clients") ||
     pathname.startsWith("/api/catalog") ||
     pathname.startsWith("/api/orders") ||
-    pathname.startsWith("/api/settings");
+    pathname.startsWith("/api/settings") ||
+    pathname.startsWith("/api/workspaces");
 
   if (!user && (isProtectedPage || isProtectedApi)) {
     if (isProtectedApi) {
@@ -69,20 +72,60 @@ export const updateSession = async (request: NextRequest) => {
     return NextResponse.redirect(loginUrl);
   }
 
-  if (user && isAuthRoute && !pathname.startsWith("/auth/confirm") && !pathname.startsWith("/auth/sign-out")) {
+  if (
+    user &&
+    isAuthRoute &&
+    !pathname.startsWith("/auth/confirm") &&
+    !pathname.startsWith("/auth/sign-out") &&
+    !pathname.startsWith("/auth/invite")
+  ) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 
   if (user && !isAuthRoute) {
-    const { data: settings } = await supabase
-      .from("user_settings")
-      .select("onboarding_completed_at")
-      .eq("owner_id", user.id)
-      .maybeSingle();
+    const { data: memberships, error: membershipsError } = await supabase
+      .from("workspace_members")
+      .select("workspace_id")
+      .eq("user_id", user.id)
+      .eq("status", "active");
+
+    if (membershipsError) {
+      if (isProtectedApi) {
+        return NextResponse.json({ error: "Falha ao carregar workspaces do usuario." }, { status: 500 });
+      }
+
+      return response;
+    }
+
+    const activeMemberships = memberships ?? [];
+    const requestedWorkspaceId = request.cookies.get(WORKSPACE_COOKIE)?.value;
+    const activeWorkspaceId =
+      activeMemberships.find((membership) => membership.workspace_id === requestedWorkspaceId)?.workspace_id ??
+      activeMemberships[0]?.workspace_id;
+
+    if (activeWorkspaceId && activeWorkspaceId !== requestedWorkspaceId) {
+      response.cookies.set(WORKSPACE_COOKIE, activeWorkspaceId, {
+        path: "/",
+        sameSite: "lax",
+        secure: process.env.NODE_ENV === "production",
+      });
+    }
+
+    const { data: settings } = activeWorkspaceId
+      ? await supabase
+          .from("workspace_settings")
+          .select("onboarding_completed_at")
+          .eq("workspace_id", activeWorkspaceId)
+          .maybeSingle()
+      : { data: null };
 
     const onboardingCompleted = Boolean(settings?.onboarding_completed_at);
 
     if (!onboardingCompleted && !isOnboardingRoute && !pathname.startsWith("/api/settings")) {
+      if (isProtectedApi) {
+        return NextResponse.json({ error: "Conclua o onboarding do workspace ativo." }, { status: 403 });
+      }
+
       return NextResponse.redirect(new URL("/onboarding", request.url));
     }
 

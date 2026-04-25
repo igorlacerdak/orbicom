@@ -14,8 +14,8 @@ import { CatalogItem } from '@/domain/catalog.types';
 import { Quote } from '@/domain/quote.types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Field, FieldContent, FieldGroup, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { ItemsTable } from '@/components/quote/items-table';
 import { LogoUpload } from '@/components/quote/logo-upload';
@@ -206,16 +206,22 @@ export const QuoteForm = ({ initialQuote, mode, initialCatalogItems = [] }: Quot
       onSubmit={handleSubmit(onSave)}
     >
       <div className="flex flex-col gap-4 rounded-xl border border-border/80 bg-card/90 p-4 shadow-sm backdrop-blur-sm md:flex-row md:items-end md:justify-between">
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <div className="space-y-2">
-            <Label htmlFor="quoteNumber">Numero do orcamento</Label>
-            <Input id="quoteNumber" {...register('quoteNumber')} />
-          </div>
+        <div className="w-full md:max-w-xl">
+          <FieldGroup className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <Field>
+              <FieldLabel htmlFor="quoteNumber">Numero do orcamento</FieldLabel>
+              <FieldContent>
+                <Input id="quoteNumber" {...register('quoteNumber')} />
+              </FieldContent>
+            </Field>
 
-          <div className="space-y-2">
-            <Label htmlFor="issueDate">Data de emissao</Label>
-            <Input id="issueDate" type="date" {...register('issueDate')} />
-          </div>
+            <Field>
+              <FieldLabel htmlFor="issueDate">Data de emissao</FieldLabel>
+              <FieldContent>
+                <Input id="issueDate" type="date" {...register('issueDate')} />
+              </FieldContent>
+            </Field>
+          </FieldGroup>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -291,7 +297,8 @@ export const QuoteForm = ({ initialQuote, mode, initialCatalogItems = [] }: Quot
         <CardHeader>
           <CardTitle className="text-lg">Observacoes gerais</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-2">
+        <CardContent>
+          <FieldGroup>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <Button
               type="button"
@@ -302,16 +309,22 @@ export const QuoteForm = ({ initialQuote, mode, initialCatalogItems = [] }: Quot
               Aplicar observação padrão
             </Button>
           </div>
-          <Textarea
-            id="notes"
-            rows={12}
-            placeholder="Prazos, condicoes comerciais, validade da proposta e observacoes importantes."
-            {...register('notes')}
-          />
+          <Field>
+            <FieldLabel htmlFor="notes">Notas da proposta</FieldLabel>
+            <FieldContent>
+              <Textarea
+                id="notes"
+                rows={12}
+                placeholder="Prazos, condicoes comerciais, validade da proposta e observacoes importantes."
+                {...register('notes')}
+              />
+            </FieldContent>
+          </Field>
           <p className="text-xs text-muted-foreground">
             Regra de calculo: impostos sao aplicados sobre subtotal - desconto +
             frete.
           </p>
+          </FieldGroup>
         </CardContent>
       </Card>
     </form>

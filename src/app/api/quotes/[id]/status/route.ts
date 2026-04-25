@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { UnauthorizedError } from "@/server/errors";
+import { ForbiddenError, UnauthorizedError } from "@/server/errors";
 import { quoteService } from "@/server/quote-service";
 
 const payloadSchema = z.object({
@@ -20,7 +20,7 @@ export async function PATCH(request: Request, context: Context) {
     const data = await quoteService.updateStatus(id, payload.status);
     return NextResponse.json({ data });
   } catch (error) {
-    const status = error instanceof UnauthorizedError ? 401 : 400;
+    const status = error instanceof UnauthorizedError ? 401 : error instanceof ForbiddenError ? 403 : 400;
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Falha ao atualizar status do orcamento." },
       { status },

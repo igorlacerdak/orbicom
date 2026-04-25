@@ -30,7 +30,7 @@ export default async function QuotesPage() {
       <section className="relative overflow-hidden rounded-2xl border border-border/70 bg-card p-6 shadow-sm">
         <div className="pointer-events-none absolute -left-10 -top-12 h-44 w-44 rounded-full bg-primary/10 blur-2xl" />
         <div className="pointer-events-none absolute -bottom-12 right-0 h-52 w-52 rounded-full bg-accent/20 blur-3xl" />
-        <div className="relative z-10 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+        <div className="relative flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div>
             <h1 className="font-heading text-3xl font-semibold tracking-tight text-foreground">Orbicom</h1>
             <p className="mt-2 max-w-2xl text-sm text-muted-foreground">

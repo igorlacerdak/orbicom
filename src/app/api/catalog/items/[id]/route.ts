@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { catalogItemSchema } from "@/domain/catalog.schema";
-import { UnauthorizedError } from "@/server/errors";
+import { ForbiddenError, UnauthorizedError } from "@/server/errors";
 import { catalogService } from "@/server/catalog-service";
 
 type Context = {
@@ -16,7 +16,7 @@ export async function PUT(request: Request, context: Context) {
     const data = await catalogService.update(id, payload);
     return NextResponse.json({ data });
   } catch (error) {
-    const status = error instanceof UnauthorizedError ? 401 : 400;
+    const status = error instanceof UnauthorizedError ? 401 : error instanceof ForbiddenError ? 403 : 400;
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Falha ao atualizar item do catalogo." },
       { status },

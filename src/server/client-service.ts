@@ -1,4 +1,5 @@
 import { createClient } from "@/utils/supabase/server";
+import { getWorkspaceContext } from "@/server/workspace-context";
 
 type ClientSummary = {
   id: string;
@@ -15,21 +16,14 @@ const normalize = (value: string) => value.trim();
 export const clientService = {
   async list(search?: string): Promise<ClientSummary[]> {
     const supabase = await createClient();
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser();
-
-    if (userError || !user) {
-      throw new Error("Nao autenticado.");
-    }
+    const workspace = await getWorkspaceContext();
 
     const query = normalize(search ?? "");
 
     let builder = supabase
       .from("clients")
       .select("id,name,document,phone,city,state,updated_at")
-      .eq("owner_id", user.id)
+      .eq("workspace_id", workspace.workspaceId)
       .order("name", { ascending: true })
       .limit(200);
 

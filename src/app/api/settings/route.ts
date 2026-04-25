@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { settingsSchema } from "@/domain/settings.schema";
-import { UnauthorizedError } from "@/server/errors";
+import { ForbiddenError, UnauthorizedError } from "@/server/errors";
 import { settingsService } from "@/server/settings-service";
 
 export async function GET() {
@@ -9,7 +9,7 @@ export async function GET() {
     const data = await settingsService.get();
     return NextResponse.json({ data });
   } catch (error) {
-    const status = error instanceof UnauthorizedError ? 401 : 500;
+    const status = error instanceof UnauthorizedError ? 401 : error instanceof ForbiddenError ? 403 : 500;
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Falha ao carregar configuracoes." },
       { status },
@@ -24,7 +24,7 @@ export async function PUT(request: Request) {
     const data = await settingsService.save(payload);
     return NextResponse.json({ data });
   } catch (error) {
-    const status = error instanceof UnauthorizedError ? 401 : 400;
+    const status = error instanceof UnauthorizedError ? 401 : error instanceof ForbiddenError ? 403 : 400;
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Falha ao salvar configuracoes." },
       { status },

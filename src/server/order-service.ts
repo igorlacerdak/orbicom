@@ -2,14 +2,14 @@ import type { Database } from "@repo/database/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { Order } from "@/domain/order.types";
-import { UnauthorizedError } from "@/server/errors";
+import { getWorkspaceContext } from "@/server/workspace-context";
 import { createClient } from "@/utils/supabase/server";
 
 type DbClient = SupabaseClient<Database>;
 
 type PartyRow = {
   id: string;
-  owner_id: string;
+  workspace_id: string;
   name: string;
   document: string;
   state_registration: string;
@@ -23,7 +23,7 @@ type PartyRow = {
 
 type OrderRow = {
   id: string;
-  owner_id: string;
+  workspace_id: string;
   order_number: string;
   issue_date: string;
   company_id: string;
@@ -55,9 +55,9 @@ type OrderItemRow = {
 const toNumber = (value: number | string | null | undefined): number => Number(value ?? 0);
 
 const orderColumns =
-  "id,owner_id,order_number,issue_date,company_id,client_id,source_quote_id,status,subtotal,discount_amount,freight,tax_amount,total,notes,created_at,updated_at";
-const companyColumns = "id,owner_id,name,document,state_registration,phone,address,zip_code,city,state,logo_url";
-const clientColumns = "id,owner_id,name,document,state_registration,phone,address,zip_code,city,state";
+  "id,workspace_id,order_number,issue_date,company_id,client_id,source_quote_id,status,subtotal,discount_amount,freight,tax_amount,total,notes,created_at,updated_at";
+const companyColumns = "id,workspace_id,name,document,state_registration,phone,address,zip_code,city,state,logo_url";
+const clientColumns = "id,workspace_id,name,document,state_registration,phone,address,zip_code,city,state";
 const itemColumns = "id,order_id,code,name,unit,quantity,unit_price,line_total,position";
 
 const mapParty = (row: PartyRow) => ({
@@ -73,18 +73,10 @@ const mapParty = (row: PartyRow) => ({
   logoDataUrl: row.logo_url ?? "",
 });
 
-const getAuthedSupabase = async (): Promise<{ supabase: DbClient; userId: string }> => {
+const getWorkspaceSupabase = async (): Promise<{ supabase: DbClient; workspaceId: string }> => {
   const supabase = await createClient();
-  const {
-    data: { user },
-    error,
-  } = await supabase.auth.getUser();
-
-  if (error || !user) {
-    throw new UnauthorizedError();
-  }
-
-  return { supabase, userId: user.id };
+  const workspace = await getWorkspaceContext();
+  return { supabase, workspaceId: workspace.workspaceId };
 };
 
 const buildOrders = async (supabase: DbClient, orderRows: OrderRow[]): Promise<Order[]> => {
@@ -165,12 +157,12 @@ const buildOrders = async (supabase: DbClient, orderRows: OrderRow[]): Promise<O
 
 export const orderService = {
   async list(): Promise<Order[]> {
-    const { supabase, userId } = await getAuthedSupabase();
+    const { supabase, workspaceId } = await getWorkspaceSupabase();
 
     const { data, error } = await supabase
       .from("orders")
       .select(orderColumns)
-      .eq("owner_id", userId)
+      .eq("workspace_id", workspaceId)
       .order("updated_at", { ascending: false });
 
     if (error) {
@@ -181,12 +173,12 @@ export const orderService = {
   },
 
   async getById(id: string): Promise<Order | null> {
-    const { supabase, userId } = await getAuthedSupabase();
+    const { supabase, workspaceId } = await getWorkspaceSupabase();
     const { data, error } = await supabase
       .from("orders")
       .select(orderColumns)
       .eq("id", id)
-      .eq("owner_id", userId)
+      .eq("workspace_id", workspaceId)
       .maybeSingle();
 
     if (error) {

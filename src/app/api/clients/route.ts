@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 
+import { UnauthorizedError } from "@/server/errors";
 import { createClient } from "@/utils/supabase/server";
+import { getWorkspaceContext } from "@/server/workspace-context";
 
 export async function GET(request: Request) {
   try {
@@ -8,19 +10,12 @@ export async function GET(request: Request) {
     const query = searchParams.get("q")?.trim() ?? "";
 
     const supabase = await createClient();
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser();
-
-    if (userError || !user) {
-      return NextResponse.json({ error: "Nao autenticado." }, { status: 401 });
-    }
+    const workspace = await getWorkspaceContext();
 
     let builder = supabase
       .from("clients")
       .select("id,name,document,state_registration,phone,address,zip_code,city,state,updated_at")
-      .eq("owner_id", user.id)
+      .eq("workspace_id", workspace.workspaceId)
       .order("name", { ascending: true });
 
     if (query) {
@@ -45,9 +40,10 @@ export async function GET(request: Request) {
       })),
     });
   } catch (error) {
+    const status = error instanceof UnauthorizedError ? 401 : 500;
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Falha ao listar clientes." },
-      { status: 500 },
+      { status },
     );
   }
 }

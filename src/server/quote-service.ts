@@ -6,15 +6,17 @@ import { defaultClient, defaultCompany } from "@/domain/quote.defaults";
 import { QuoteFormInput } from "@/domain/quote.schema";
 import { Quote, QuoteStatus } from "@/domain/quote.types";
 import { buildDefaultQuoteNotes } from "@/lib/quote-notes";
-import { UnauthorizedError } from "@/server/errors";
+import { ForbiddenError } from "@/server/errors";
 import { settingsService } from "@/server/settings-service";
+import { getWorkspaceContext, hasAnyRole } from "@/server/workspace-context";
+import type { WorkspaceRole } from "@/server/workspace-context";
 import { createClient } from "@/utils/supabase/server";
 
 type DbClient = SupabaseClient<Database>;
 
 type PartyRow = {
   id: string;
-  owner_id: string;
+  workspace_id: string;
   name: string;
   document: string;
   state_registration: string;
@@ -28,7 +30,7 @@ type PartyRow = {
 
 type QuoteRow = {
   id: string;
-  owner_id: string;
+  workspace_id: string;
   quote_number: string;
   issue_date: string;
   company_id: string;
@@ -127,24 +129,25 @@ const mapQuote = (
 });
 
 const quoteColumns =
-  "id,owner_id,quote_number,issue_date,company_id,client_id,discount_type,discount_value,freight,tax_rate,subtotal,discount_amount,tax_amount,total,notes,status,created_at,updated_at";
+  "id,workspace_id,quote_number,issue_date,company_id,client_id,discount_type,discount_value,freight,tax_rate,subtotal,discount_amount,tax_amount,total,notes,status,created_at,updated_at";
 
-const companyColumns = "id,owner_id,name,document,state_registration,phone,address,zip_code,city,state,logo_url";
-const clientColumns = "id,owner_id,name,document,state_registration,phone,address,zip_code,city,state";
+const companyColumns = "id,workspace_id,name,document,state_registration,phone,address,zip_code,city,state,logo_url";
+const clientColumns = "id,workspace_id,name,document,state_registration,phone,address,zip_code,city,state";
 const quoteItemColumns = "id,quote_id,catalog_item_id,code,name,unit,quantity,unit_price,line_total,position";
 
-const getAuthedSupabase = async (): Promise<{ supabase: DbClient; userId: string }> => {
+const getWorkspaceSupabase = async (): Promise<{
+  supabase: DbClient;
+  workspace: { userId: string; workspaceId: string; roles: WorkspaceRole[] };
+}> => {
   const supabase = await createClient();
-  const {
-    data: { user },
-    error,
-  } = await supabase.auth.getUser();
+  const workspace = await getWorkspaceContext();
+  return { supabase, workspace };
+};
 
-  if (error || !user) {
-    throw new UnauthorizedError();
+const assertEditorRole = (roles: WorkspaceRole[]) => {
+  if (!hasAnyRole(roles, ["owner", "admin", "operator"])) {
+    throw new ForbiddenError("Apenas owner/admin/operator podem editar orcamentos.");
   }
-
-  return { supabase, userId: user.id };
 };
 
 const buildQuotes = async (supabase: DbClient, quoteRows: QuoteRow[]): Promise<Quote[]> => {
@@ -195,9 +198,15 @@ const buildQuotes = async (supabase: DbClient, quoteRows: QuoteRow[]): Promise<Q
   });
 };
 
-const upsertCompany = async (supabase: DbClient, userId: string, company: QuoteFormInput["company"]) => {
+const upsertCompany = async (
+  supabase: DbClient,
+  ownerId: string,
+  workspaceId: string,
+  company: QuoteFormInput["company"],
+) => {
   const payload = {
-    owner_id: userId,
+    owner_id: ownerId,
+    workspace_id: workspaceId,
     name: company.name,
     document: company.document,
     state_registration: company.stateRegistration,
@@ -212,7 +221,7 @@ const upsertCompany = async (supabase: DbClient, userId: string, company: QuoteF
 
   const { data, error } = await supabase
     .from("companies")
-    .upsert(payload, { onConflict: "owner_id,document" })
+    .upsert(payload, { onConflict: "workspace_id,document" })
     .select("id")
     .single();
 
@@ -223,9 +232,15 @@ const upsertCompany = async (supabase: DbClient, userId: string, company: QuoteF
   return data.id;
 };
 
-const upsertClient = async (supabase: DbClient, userId: string, client: QuoteFormInput["client"]) => {
+const upsertClient = async (
+  supabase: DbClient,
+  ownerId: string,
+  workspaceId: string,
+  client: QuoteFormInput["client"],
+) => {
   const payload = {
-    owner_id: userId,
+    owner_id: ownerId,
+    workspace_id: workspaceId,
     name: client.name,
     document: client.document,
     state_registration: client.stateRegistration,
@@ -239,7 +254,7 @@ const upsertClient = async (supabase: DbClient, userId: string, client: QuoteFor
 
   const { data, error } = await supabase
     .from("clients")
-    .upsert(payload, { onConflict: "owner_id,document" })
+    .upsert(payload, { onConflict: "workspace_id,document" })
     .select("id")
     .single();
 
@@ -250,12 +265,12 @@ const upsertClient = async (supabase: DbClient, userId: string, client: QuoteFor
   return data.id;
 };
 
-const hydrateQuote = async (supabase: DbClient, userId: string, quoteId: string): Promise<Quote> => {
+const hydrateQuote = async (supabase: DbClient, workspaceId: string, quoteId: string): Promise<Quote> => {
   const { data, error } = await supabase
     .from("quotes")
     .select(quoteColumns)
     .eq("id", quoteId)
-    .eq("owner_id", userId)
+    .eq("workspace_id", workspaceId)
     .single();
 
   if (error || !data) {
@@ -297,12 +312,12 @@ const assertTransition = (from: QuoteStatus, to: QuoteStatus) => {
   }
 };
 
-const getRowById = async (supabase: DbClient, userId: string, quoteId: string): Promise<QuoteRow> => {
+const getRowById = async (supabase: DbClient, workspaceId: string, quoteId: string): Promise<QuoteRow> => {
   const { data, error } = await supabase
     .from("quotes")
     .select(quoteColumns)
     .eq("id", quoteId)
-    .eq("owner_id", userId)
+    .eq("workspace_id", workspaceId)
     .maybeSingle();
 
   if (error) {
@@ -316,12 +331,17 @@ const getRowById = async (supabase: DbClient, userId: string, quoteId: string): 
   return data as QuoteRow;
 };
 
-const convertQuoteToOrder = async (supabase: DbClient, userId: string, quote: QuoteRow): Promise<string> => {
+const convertQuoteToOrder = async (
+  supabase: DbClient,
+  ownerId: string,
+  workspaceId: string,
+  quote: QuoteRow,
+): Promise<string> => {
   const { data: existingOrder, error: existingError } = await supabase
     .from("orders")
     .select("id")
     .eq("source_quote_id", quote.id)
-    .eq("owner_id", userId)
+    .eq("workspace_id", workspaceId)
     .maybeSingle();
 
   if (existingError) {
@@ -335,7 +355,8 @@ const convertQuoteToOrder = async (supabase: DbClient, userId: string, quote: Qu
   const orderNumber = await settingsService.nextOrderNumber();
 
   const orderPayload: OrderInsert = {
-    owner_id: userId,
+    owner_id: ownerId,
+    workspace_id: workspaceId,
     order_number: orderNumber,
     issue_date: quote.issue_date,
     company_id: quote.company_id,
@@ -393,12 +414,12 @@ const convertQuoteToOrder = async (supabase: DbClient, userId: string, quote: Qu
 
 export const quoteService = {
   async list(): Promise<Quote[]> {
-    const { supabase, userId } = await getAuthedSupabase();
+    const { supabase, workspace } = await getWorkspaceSupabase();
 
     const { data, error } = await supabase
       .from("quotes")
       .select(quoteColumns)
-      .eq("owner_id", userId)
+      .eq("workspace_id", workspace.workspaceId)
       .order("updated_at", { ascending: false });
 
     if (error) {
@@ -409,13 +430,13 @@ export const quoteService = {
   },
 
   async getById(id: string): Promise<Quote | null> {
-    const { supabase, userId } = await getAuthedSupabase();
+    const { supabase, workspace } = await getWorkspaceSupabase();
 
     const { data, error } = await supabase
       .from("quotes")
       .select(quoteColumns)
       .eq("id", id)
-      .eq("owner_id", userId)
+      .eq("workspace_id", workspace.workspaceId)
       .maybeSingle();
 
     if (error) {
@@ -431,6 +452,9 @@ export const quoteService = {
   },
 
   async createDraft(): Promise<Quote> {
+    const { workspace } = await getWorkspaceSupabase();
+    assertEditorRole(workspace.roles);
+
     const settings = await settingsService.get();
     const now = new Date().toISOString();
     const quoteNumber = `${settings.quotePrefix}-${String(settings.quoteSequence).padStart(4, "0")}`;
@@ -483,9 +507,11 @@ export const quoteService = {
   },
 
   async create(payload: QuoteFormInput): Promise<Quote> {
-    const { supabase, userId } = await getAuthedSupabase();
-    const companyId = await upsertCompany(supabase, userId, payload.company);
-    const clientId = await upsertClient(supabase, userId, payload.client);
+    const { supabase, workspace } = await getWorkspaceSupabase();
+    assertEditorRole(workspace.roles);
+
+    const companyId = await upsertCompany(supabase, workspace.userId, workspace.workspaceId, payload.company);
+    const clientId = await upsertClient(supabase, workspace.userId, workspace.workspaceId, payload.client);
     const totals = calculateQuoteTotals(payload.items, payload.adjustments);
 
     const generatedNumber = await settingsService.nextQuoteNumber();
@@ -494,7 +520,8 @@ export const quoteService = {
     const { data, error } = await supabase
       .from("quotes")
       .insert({
-        owner_id: userId,
+        owner_id: workspace.userId,
+        workspace_id: workspace.workspaceId,
         quote_number: number,
         issue_date: payload.issueDate,
         company_id: companyId,
@@ -518,13 +545,15 @@ export const quoteService = {
     }
 
     await persistItems(supabase, data.id, payload.items);
-    return hydrateQuote(supabase, userId, data.id);
+    return hydrateQuote(supabase, workspace.workspaceId, data.id);
   },
 
   async update(quoteId: string, payload: QuoteFormInput): Promise<Quote> {
-    const { supabase, userId } = await getAuthedSupabase();
-    const companyId = await upsertCompany(supabase, userId, payload.company);
-    const clientId = await upsertClient(supabase, userId, payload.client);
+    const { supabase, workspace } = await getWorkspaceSupabase();
+    assertEditorRole(workspace.roles);
+
+    const companyId = await upsertCompany(supabase, workspace.userId, workspace.workspaceId, payload.company);
+    const clientId = await upsertClient(supabase, workspace.userId, workspace.workspaceId, payload.client);
     const totals = calculateQuoteTotals(payload.items, payload.adjustments);
 
     const { error } = await supabase
@@ -546,19 +575,21 @@ export const quoteService = {
         updated_at: new Date().toISOString(),
       })
       .eq("id", quoteId)
-      .eq("owner_id", userId);
+      .eq("workspace_id", workspace.workspaceId);
 
     if (error) {
       throw new Error(`Falha ao atualizar orcamento: ${error.message}`);
     }
 
     await persistItems(supabase, quoteId, payload.items);
-    return hydrateQuote(supabase, userId, quoteId);
+    return hydrateQuote(supabase, workspace.workspaceId, quoteId);
   },
 
   async updateStatus(quoteId: string, status: QuoteStatus): Promise<Quote> {
-    const { supabase, userId } = await getAuthedSupabase();
-    const current = await getRowById(supabase, userId, quoteId);
+    const { supabase, workspace } = await getWorkspaceSupabase();
+    assertEditorRole(workspace.roles);
+
+    const current = await getRowById(supabase, workspace.workspaceId, quoteId);
 
     if (current.status !== status) {
       assertTransition(current.status, status);
@@ -568,31 +599,33 @@ export const quoteService = {
       .from("quotes")
       .update({ status, updated_at: new Date().toISOString() })
       .eq("id", quoteId)
-      .eq("owner_id", userId);
+      .eq("workspace_id", workspace.workspaceId);
 
     if (error) {
       throw new Error(`Falha ao atualizar status: ${error.message}`);
     }
 
-    return hydrateQuote(supabase, userId, quoteId);
+    return hydrateQuote(supabase, workspace.workspaceId, quoteId);
   },
 
   async convertToOrder(quoteId: string): Promise<{ quote: Quote; orderId: string }> {
-    const { supabase, userId } = await getAuthedSupabase();
-    const current = await getRowById(supabase, userId, quoteId);
+    const { supabase, workspace } = await getWorkspaceSupabase();
+    assertEditorRole(workspace.roles);
+
+    const current = await getRowById(supabase, workspace.workspaceId, quoteId);
 
     if (current.status !== "approved" && current.status !== "converted") {
       throw new Error("Apenas orcamentos aprovados podem ser convertidos em pedido.");
     }
 
-    const orderId = await convertQuoteToOrder(supabase, userId, current);
+    const orderId = await convertQuoteToOrder(supabase, workspace.userId, workspace.workspaceId, current);
 
     if (current.status !== "converted") {
       const { error } = await supabase
         .from("quotes")
         .update({ status: "converted", updated_at: new Date().toISOString() })
         .eq("id", quoteId)
-        .eq("owner_id", userId);
+        .eq("workspace_id", workspace.workspaceId);
 
       if (error) {
         throw new Error(`Falha ao marcar orcamento como convertido: ${error.message}`);
@@ -600,14 +633,16 @@ export const quoteService = {
     }
 
     return {
-      quote: await hydrateQuote(supabase, userId, quoteId),
+      quote: await hydrateQuote(supabase, workspace.workspaceId, quoteId),
       orderId,
     };
   },
 
   async duplicate(quoteId: string): Promise<Quote> {
-    const { supabase, userId } = await getAuthedSupabase();
-    const current = await getRowById(supabase, userId, quoteId);
+    const { supabase, workspace } = await getWorkspaceSupabase();
+    assertEditorRole(workspace.roles);
+
+    const current = await getRowById(supabase, workspace.workspaceId, quoteId);
 
     const { data: sourceItems, error: sourceItemsError } = await supabase
       .from("quote_items")
@@ -624,7 +659,8 @@ export const quoteService = {
     const { data: created, error: createError } = await supabase
       .from("quotes")
       .insert({
-        owner_id: userId,
+        owner_id: workspace.userId,
+        workspace_id: workspace.workspaceId,
         quote_number: number,
         issue_date: new Date().toISOString().slice(0, 10),
         company_id: current.company_id,
@@ -666,6 +702,6 @@ export const quoteService = {
       }
     }
 
-    return hydrateQuote(supabase, userId, created.id);
+    return hydrateQuote(supabase, workspace.workspaceId, created.id);
   },
 };

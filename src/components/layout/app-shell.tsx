@@ -1,7 +1,9 @@
 import { signOutAction } from '@/app/auth/actions';
 import { AppSidebar } from '@/components/layout/app-sidebar';
+import { WorkspaceSwitcher } from '@/components/layout/workspace-switcher';
 import { ThemeToggle } from '@/components/theme/theme-toggle';
 import { Button } from '@/components/ui/button';
+import { getWorkspaceContext } from '@/server/workspace-context';
 import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 import { createClient } from '@/utils/supabase/server';
 
@@ -26,6 +28,7 @@ const buildNameFromEmail = (email: string) => {
 
 export async function AppShell({ children }: AppShellProps) {
   const supabase = await createClient();
+  const workspaceContext = await getWorkspaceContext();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -42,6 +45,12 @@ export async function AppShell({ children }: AppShellProps) {
   return (
     <SidebarProvider>
       <AppSidebar
+        workspaces={workspaceContext.workspaces.map((workspace) => ({
+          id: workspace.id,
+          name: workspace.name,
+          slug: workspace.slug,
+        }))}
+        activeWorkspaceId={workspaceContext.workspaceId}
         user={{
           name: displayName,
           email,
@@ -52,7 +61,14 @@ export async function AppShell({ children }: AppShellProps) {
         <header className="sticky top-0 z-10 flex h-14 items-center justify-between rounded-md border-b border-border/80 bg-background/85 px-4 backdrop-blur">
           <div className="flex items-center gap-2">
             <SidebarTrigger />
-            <p className="text-sm font-medium text-muted-foreground">Orbicom</p>
+            <WorkspaceSwitcher
+              activeWorkspaceId={workspaceContext.workspaceId}
+              workspaces={workspaceContext.workspaces.map((workspace) => ({
+                id: workspace.id,
+                name: workspace.name,
+                slug: workspace.slug,
+              }))}
+            />
           </div>
           <div className="flex items-center gap-2">
             <ThemeToggle />

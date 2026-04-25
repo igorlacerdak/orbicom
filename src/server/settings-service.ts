@@ -1,6 +1,7 @@
 import { createClient } from "@/utils/supabase/server";
 import { SettingsInput } from "@/domain/settings.schema";
-import { UnauthorizedError } from "@/server/errors";
+import { ForbiddenError } from "@/server/errors";
+import { getWorkspaceContext, hasAnyRole } from "@/server/workspace-context";
 
 type UserSettings = SettingsInput & {
   onboardingCompletedAt: string | null;
@@ -83,18 +84,10 @@ const mapRow = (
   };
 };
 
-const getAuthedSupabase = async () => {
+const getWorkspaceSupabase = async () => {
   const supabase = await createClient();
-  const {
-    data: { user },
-    error,
-  } = await supabase.auth.getUser();
-
-  if (error || !user) {
-    throw new UnauthorizedError();
-  }
-
-  return { supabase, userId: user.id };
+  const workspace = await getWorkspaceContext();
+  return { supabase, workspace };
 };
 
 const settingsColumns =
@@ -126,11 +119,11 @@ const toPayload = (input: SettingsInput, markCompleted: boolean) => ({
 
 export const settingsService = {
   async get(): Promise<UserSettings> {
-    const { supabase, userId } = await getAuthedSupabase();
+    const { supabase, workspace } = await getWorkspaceSupabase();
     const { data, error } = await supabase
-      .from("user_settings")
+      .from("workspace_settings")
       .select(settingsColumns)
-      .eq("owner_id", userId)
+      .eq("workspace_id", workspace.workspaceId)
       .maybeSingle();
 
     if (error) {
@@ -141,15 +134,19 @@ export const settingsService = {
   },
 
   async save(input: SettingsInput): Promise<UserSettings> {
-    const { supabase, userId } = await getAuthedSupabase();
+    const { supabase, workspace } = await getWorkspaceSupabase();
+    if (!hasAnyRole(workspace.roles, ["owner", "admin"])) {
+      throw new ForbiddenError("Apenas owner/admin podem alterar configuracoes do workspace.");
+    }
+
     const payload = {
-      owner_id: userId,
+      workspace_id: workspace.workspaceId,
       ...toPayload(input, true),
     };
 
     const { data, error } = await supabase
-      .from("user_settings")
-      .upsert(payload, { onConflict: "owner_id" })
+      .from("workspace_settings")
+      .upsert(payload, { onConflict: "workspace_id" })
       .select(settingsColumns)
       .single();
 
@@ -166,11 +163,15 @@ export const settingsService = {
   },
 
   async nextQuoteNumber(): Promise<string> {
-    const { supabase, userId } = await getAuthedSupabase();
+    const { supabase, workspace } = await getWorkspaceSupabase();
+    if (!hasAnyRole(workspace.roles, ["owner", "admin", "operator"])) {
+      throw new ForbiddenError("Apenas owner/admin/operator podem criar ou editar orcamentos.");
+    }
+
     const { data, error } = await supabase
-      .from("user_settings")
+      .from("workspace_settings")
       .select("quote_prefix,quote_sequence")
-      .eq("owner_id", userId)
+      .eq("workspace_id", workspace.workspaceId)
       .maybeSingle();
 
     if (error) {
@@ -182,15 +183,15 @@ export const settingsService = {
     const number = `${prefix}-${String(sequence).padStart(4, "0")}`;
 
     const { error: updateError } = await supabase
-      .from("user_settings")
+      .from("workspace_settings")
       .upsert(
         {
-          owner_id: userId,
+          workspace_id: workspace.workspaceId,
           quote_prefix: prefix,
           quote_sequence: sequence + 1,
           updated_at: new Date().toISOString(),
         },
-        { onConflict: "owner_id" },
+        { onConflict: "workspace_id" },
       );
 
     if (updateError) {
@@ -201,11 +202,15 @@ export const settingsService = {
   },
 
   async nextOrderNumber(): Promise<string> {
-    const { supabase, userId } = await getAuthedSupabase();
+    const { supabase, workspace } = await getWorkspaceSupabase();
+    if (!hasAnyRole(workspace.roles, ["owner", "admin", "operator"])) {
+      throw new ForbiddenError("Apenas owner/admin/operator podem criar pedidos.");
+    }
+
     const { data, error } = await supabase
-      .from("user_settings")
+      .from("workspace_settings")
       .select("order_prefix,order_sequence")
-      .eq("owner_id", userId)
+      .eq("workspace_id", workspace.workspaceId)
       .maybeSingle();
 
     if (error) {
@@ -217,15 +222,15 @@ export const settingsService = {
     const number = `${prefix}-${String(sequence).padStart(4, "0")}`;
 
     const { error: updateError } = await supabase
-      .from("user_settings")
+      .from("workspace_settings")
       .upsert(
         {
-          owner_id: userId,
+          workspace_id: workspace.workspaceId,
           order_prefix: prefix,
           order_sequence: sequence + 1,
           updated_at: new Date().toISOString(),
         },
-        { onConflict: "owner_id" },
+        { onConflict: "workspace_id" },
       );
 
     if (updateError) {

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { catalogItemSchema } from "@/domain/catalog.schema";
-import { UnauthorizedError } from "@/server/errors";
+import { ForbiddenError, UnauthorizedError } from "@/server/errors";
 import { catalogService } from "@/server/catalog-service";
 
 export async function GET(request: Request) {
@@ -20,7 +20,7 @@ export async function GET(request: Request) {
     const data = await catalogService.list({ q, type, active, minPrice, maxPrice });
     return NextResponse.json({ data });
   } catch (error) {
-    const status = error instanceof UnauthorizedError ? 401 : 500;
+    const status = error instanceof UnauthorizedError ? 401 : error instanceof ForbiddenError ? 403 : 500;
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Falha ao listar itens do catalogo." },
       { status },
@@ -35,7 +35,7 @@ export async function POST(request: Request) {
     const data = await catalogService.create(payload);
     return NextResponse.json({ data });
   } catch (error) {
-    const status = error instanceof UnauthorizedError ? 401 : 400;
+    const status = error instanceof UnauthorizedError ? 401 : error instanceof ForbiddenError ? 403 : 400;
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Falha ao cadastrar item do catalogo." },
       { status },

@@ -7,8 +7,8 @@ import { QuoteTotals } from '@/domain/quote.types';
 import { formatCurrency } from '@/lib/formatters';
 import { formatSelectValue, selectLabelMaps } from '@/lib/select-labels';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Field, FieldContent, FieldGroup, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import {
   Select,
   SelectContent,
@@ -30,59 +30,69 @@ export const TotalsCard = ({ control, register, totals }: TotalsCardProps) => {
         <CardTitle className="text-lg">Totais e ajustes</CardTitle>
       </CardHeader>
       <CardContent className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <div className="space-y-2">
-          <Label>Tipo de desconto</Label>
-          <Controller
-            control={control}
-            name="adjustments.discountType"
-            render={({ field }) => (
-              <Select value={field.value} onValueChange={field.onChange}>
-                <SelectTrigger className="w-full">
-                  <SelectValue>
-                    {formatSelectValue(selectLabelMaps.discountType, 'Selecione')}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="fixed">Valor fixo (R$)</SelectItem>
-                  <SelectItem value="percent">Percentual (%)</SelectItem>
-                </SelectContent>
-              </Select>
-            )}
-          />
-        </div>
+        <FieldGroup className="grid grid-cols-1 gap-4 lg:col-span-2 lg:grid-cols-2">
+          <Field>
+            <FieldLabel>Tipo de desconto</FieldLabel>
+            <FieldContent>
+              <Controller
+                control={control}
+                name="adjustments.discountType"
+                render={({ field }) => (
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue>
+                        {formatSelectValue(selectLabelMaps.discountType, 'Selecione')}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="fixed">Valor fixo (R$)</SelectItem>
+                      <SelectItem value="percent">Percentual (%)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                )}
+              />
+            </FieldContent>
+          </Field>
 
-        <div className="space-y-2">
-          <Label htmlFor="discountValue">Desconto</Label>
-          <Input
-            id="discountValue"
-            type="number"
-            min="0"
-            step="0.01"
-            {...register('adjustments.discountValue', { valueAsNumber: true })}
-          />
-        </div>
+          <Field>
+            <FieldLabel htmlFor="discountValue">Desconto</FieldLabel>
+            <FieldContent>
+              <Input
+                id="discountValue"
+                type="number"
+                min="0"
+                step="0.01"
+                {...register('adjustments.discountValue', { valueAsNumber: true })}
+              />
+            </FieldContent>
+          </Field>
 
-        <div className="space-y-2">
-          <Label htmlFor="freight">Frete</Label>
-          <Input
-            id="freight"
-            type="number"
-            min="0"
-            step="0.01"
-            {...register('adjustments.freight', { valueAsNumber: true })}
-          />
-        </div>
+          <Field>
+            <FieldLabel htmlFor="freight">Frete</FieldLabel>
+            <FieldContent>
+              <Input
+                id="freight"
+                type="number"
+                min="0"
+                step="0.01"
+                {...register('adjustments.freight', { valueAsNumber: true })}
+              />
+            </FieldContent>
+          </Field>
 
-        <div className="space-y-2">
-          <Label htmlFor="taxRate">Impostos (%)</Label>
-          <Input
-            id="taxRate"
-            type="number"
-            min="0"
-            step="0.01"
-            {...register('adjustments.taxRate', { valueAsNumber: true })}
-          />
-        </div>
+          <Field>
+            <FieldLabel htmlFor="taxRate">Impostos (%)</FieldLabel>
+            <FieldContent>
+              <Input
+                id="taxRate"
+                type="number"
+                min="0"
+                step="0.01"
+                {...register('adjustments.taxRate', { valueAsNumber: true })}
+              />
+            </FieldContent>
+          </Field>
+        </FieldGroup>
 
         <div className="rounded-lg border border-border bg-muted/20 p-4 lg:col-span-2">
           <div className="space-y-1 text-sm">

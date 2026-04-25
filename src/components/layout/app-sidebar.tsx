@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { BarChart3, Building2, ClipboardList, FileText, PackageSearch, Users } from 'lucide-react';
+import { BarChart3, Building2, ClipboardList, FileText, PackageSearch, Settings2, Users } from 'lucide-react';
 
 import { NavUser } from '@/components/layout/nav-user';
 import {
@@ -55,9 +55,25 @@ const navigation = [
       },
     ],
   },
+  {
+    title: 'Administracao',
+    items: [
+      {
+        title: 'Controle de acesso',
+        href: '/configuracoes/acesso',
+        icon: Settings2,
+      },
+    ],
+  },
 ];
 
 type AppSidebarProps = {
+  workspaces: Array<{
+    id: string;
+    name: string;
+    slug: string;
+  }>;
+  activeWorkspaceId: string;
   user: {
     name: string;
     email: string;
@@ -65,8 +81,9 @@ type AppSidebarProps = {
   };
 };
 
-export function AppSidebar({ user }: AppSidebarProps) {
+export function AppSidebar({ workspaces, activeWorkspaceId, user }: AppSidebarProps) {
   const pathname = usePathname();
+  const activeWorkspace = workspaces.find((workspace) => workspace.id === activeWorkspaceId);
 
   return (
     <Sidebar collapsible="icon" variant="inset">
@@ -78,7 +95,7 @@ export function AppSidebar({ user }: AppSidebarProps) {
           <div className="min-w-0 group-data-[collapsible=icon]:hidden">
             <p className="truncate text-sm font-semibold">Orbicom</p>
             <p className="truncate text-xs text-sidebar-foreground/70">
-              Gestao comercial
+              {activeWorkspace?.name ?? 'Gestao comercial'}
             </p>
           </div>
         </div>

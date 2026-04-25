@@ -3,8 +3,8 @@ import Link from "next/link";
 import { signInAction } from "@/app/auth/actions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Field, FieldContent, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 
 type PageProps = {
   searchParams: Promise<{
@@ -24,18 +24,24 @@ export default async function LoginPage({ searchParams }: PageProps) {
           <CardDescription>Use seu email e senha para acessar seu painel comercial.</CardDescription>
         </CardHeader>
         <CardContent>
-          <form action={signInAction} className="space-y-4">
+          <form action={signInAction} className="flex flex-col gap-4">
             <input type="hidden" name="next" value={next ?? "/dashboard"} />
 
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input id="email" name="email" type="email" autoComplete="email" required />
-            </div>
+            <FieldGroup>
+              <Field>
+                <FieldLabel htmlFor="email">Email</FieldLabel>
+                <FieldContent>
+                  <Input id="email" name="email" type="email" autoComplete="email" required />
+                </FieldContent>
+              </Field>
 
-            <div className="space-y-2">
-              <Label htmlFor="password">Senha</Label>
-              <Input id="password" name="password" type="password" autoComplete="current-password" required />
-            </div>
+              <Field>
+                <FieldLabel htmlFor="password">Senha</FieldLabel>
+                <FieldContent>
+                  <Input id="password" name="password" type="password" autoComplete="current-password" required />
+                </FieldContent>
+              </Field>
+            </FieldGroup>
 
             {message ? (
               <p className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">

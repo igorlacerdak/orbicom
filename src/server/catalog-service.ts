@@ -1,11 +1,12 @@
 import { CatalogItemInput } from "@/domain/catalog.schema";
 import { CatalogItem, CatalogItemType } from "@/domain/catalog.types";
-import { UnauthorizedError } from "@/server/errors";
+import { ForbiddenError } from "@/server/errors";
+import { getWorkspaceContext, hasAnyRole } from "@/server/workspace-context";
 import { createClient } from "@/utils/supabase/server";
 
 type CatalogRow = {
   id: string;
-  owner_id: string;
+  workspace_id: string;
   code: string;
   name: string;
   type: CatalogItemType;
@@ -18,7 +19,7 @@ type CatalogRow = {
 };
 
 const columns =
-  "id,owner_id,code,name,type,unit,default_unit_price,allow_custom_description,active,created_at,updated_at";
+  "id,workspace_id,code,name,type,unit,default_unit_price,allow_custom_description,active,created_at,updated_at";
 
 const mapItem = (row: CatalogRow): CatalogItem => ({
   id: row.id,
@@ -33,27 +34,21 @@ const mapItem = (row: CatalogRow): CatalogItem => ({
   updatedAt: row.updated_at,
 });
 
-const getAuthedSupabase = async () => {
+const getWorkspaceSupabase = async () => {
   const supabase = await createClient();
-  const {
-    data: { user },
-    error,
-  } = await supabase.auth.getUser();
-
-  if (error || !user) {
-    throw new UnauthorizedError();
-  }
-
-  return { supabase, userId: user.id };
+  const workspace = await getWorkspaceContext();
+  return { supabase, workspace };
 };
 
 const ensureDefaultCatalogItem = async (
-  supabase: Awaited<ReturnType<typeof getAuthedSupabase>>["supabase"],
-  userId: string,
+  supabase: Awaited<ReturnType<typeof getWorkspaceSupabase>>["supabase"],
+  ownerId: string,
+  workspaceId: string,
 ) => {
   const { error } = await supabase.from("catalog_items").upsert(
     {
-      owner_id: userId,
+      owner_id: ownerId,
+      workspace_id: workspaceId,
       code: "000",
       name: "Item personalizado",
       type: "service",
@@ -63,7 +58,7 @@ const ensureDefaultCatalogItem = async (
       active: true,
       updated_at: new Date().toISOString(),
     },
-    { onConflict: "owner_id,code" },
+    { onConflict: "workspace_id,code" },
   );
 
   if (error) {
@@ -79,13 +74,13 @@ export const catalogService = {
     minPrice?: number;
     maxPrice?: number;
   }): Promise<CatalogItem[]> {
-    const { supabase, userId } = await getAuthedSupabase();
-    await ensureDefaultCatalogItem(supabase, userId);
+    const { supabase, workspace } = await getWorkspaceSupabase();
+    await ensureDefaultCatalogItem(supabase, workspace.userId, workspace.workspaceId);
 
     let query = supabase
       .from("catalog_items")
       .select(columns)
-      .eq("owner_id", userId)
+      .eq("workspace_id", workspace.workspaceId)
       .order("code", { ascending: true })
       .order("name", { ascending: true });
 
@@ -120,12 +115,16 @@ export const catalogService = {
   },
 
   async create(input: CatalogItemInput): Promise<CatalogItem> {
-    const { supabase, userId } = await getAuthedSupabase();
+    const { supabase, workspace } = await getWorkspaceSupabase();
+    if (!hasAnyRole(workspace.roles, ["owner", "admin", "operator"])) {
+      throw new ForbiddenError("Apenas owner/admin/operator podem editar o catalogo.");
+    }
 
     const { data, error } = await supabase
       .from("catalog_items")
       .insert({
-        owner_id: userId,
+        owner_id: workspace.userId,
+        workspace_id: workspace.workspaceId,
         code: input.code,
         name: input.name,
         type: input.type,
@@ -145,7 +144,10 @@ export const catalogService = {
   },
 
   async update(id: string, input: CatalogItemInput): Promise<CatalogItem> {
-    const { supabase, userId } = await getAuthedSupabase();
+    const { supabase, workspace } = await getWorkspaceSupabase();
+    if (!hasAnyRole(workspace.roles, ["owner", "admin", "operator"])) {
+      throw new ForbiddenError("Apenas owner/admin/operator podem editar o catalogo.");
+    }
 
     const { data, error } = await supabase
       .from("catalog_items")
@@ -160,7 +162,7 @@ export const catalogService = {
         updated_at: new Date().toISOString(),
       })
       .eq("id", id)
-      .eq("owner_id", userId)
+      .eq("workspace_id", workspace.workspaceId)
       .select(columns)
       .single();
 
@@ -172,13 +174,16 @@ export const catalogService = {
   },
 
   async setActive(id: string, active: boolean): Promise<CatalogItem> {
-    const { supabase, userId } = await getAuthedSupabase();
+    const { supabase, workspace } = await getWorkspaceSupabase();
+    if (!hasAnyRole(workspace.roles, ["owner", "admin", "operator"])) {
+      throw new ForbiddenError("Apenas owner/admin/operator podem editar o catalogo.");
+    }
 
     const { data, error } = await supabase
       .from("catalog_items")
       .update({ active, updated_at: new Date().toISOString() })
       .eq("id", id)
-      .eq("owner_id", userId)
+      .eq("workspace_id", workspace.workspaceId)
       .select(columns)
       .single();
 

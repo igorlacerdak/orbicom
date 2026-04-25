@@ -3,8 +3,8 @@ import { FieldErrors, UseFormRegister } from "react-hook-form";
 
 import { QuoteFormInput } from "@/domain/quote.schema";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Field, FieldContent, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { formatCep, formatCpfCnpj, formatPhoneBr, formatStateCode } from "@/lib/masks";
 
 type PartyFieldsProps = {
@@ -35,73 +35,91 @@ export const PartyFields = ({ title, scope, register, errors }: PartyFieldsProps
       <CardHeader>
         <CardTitle className="text-lg">{title}</CardTitle>
       </CardHeader>
-      <CardContent className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        <div className="md:col-span-2 space-y-2">
-          <Label htmlFor={`${scope}-name`}>Nome / Razao social</Label>
-          <Input id={`${scope}-name`} {...register(textField(scope, "name"))} />
-          <p className="text-xs text-destructive">{localErrors?.name?.message}</p>
-        </div>
+      <CardContent>
+        <FieldGroup className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <Field className="md:col-span-2">
+            <FieldLabel htmlFor={`${scope}-name`}>Nome / Razao social</FieldLabel>
+            <FieldContent>
+              <Input id={`${scope}-name`} {...register(textField(scope, "name"))} />
+              <FieldError>{localErrors?.name?.message}</FieldError>
+            </FieldContent>
+          </Field>
 
-        <div className="space-y-2">
-          <Label htmlFor={`${scope}-document`}>CNPJ/CPF</Label>
-          <Input
-            id={`${scope}-document`}
-            inputMode="numeric"
-            placeholder="00.000.000/0000-00"
-            {...register(textField(scope, "document"), applyMask(formatCpfCnpj))}
-          />
-          <p className="text-xs text-destructive">{localErrors?.document?.message}</p>
-        </div>
+          <Field>
+            <FieldLabel htmlFor={`${scope}-document`}>CNPJ/CPF</FieldLabel>
+            <FieldContent>
+              <Input
+                id={`${scope}-document`}
+                inputMode="numeric"
+                placeholder="00.000.000/0000-00"
+                {...register(textField(scope, "document"), applyMask(formatCpfCnpj))}
+              />
+              <FieldError>{localErrors?.document?.message}</FieldError>
+            </FieldContent>
+          </Field>
 
-        <div className="space-y-2">
-          <Label htmlFor={`${scope}-stateRegistration`}>Inscricao estadual</Label>
-          <Input id={`${scope}-stateRegistration`} {...register(textField(scope, "stateRegistration"))} />
-        </div>
+          <Field>
+            <FieldLabel htmlFor={`${scope}-stateRegistration`}>Inscricao estadual</FieldLabel>
+            <FieldContent>
+              <Input id={`${scope}-stateRegistration`} {...register(textField(scope, "stateRegistration"))} />
+            </FieldContent>
+          </Field>
 
-        <div className="space-y-2">
-          <Label htmlFor={`${scope}-phone`}>Telefone</Label>
-          <Input
-            id={`${scope}-phone`}
-            inputMode="tel"
-            placeholder="(00) 00000-0000"
-            {...register(textField(scope, "phone"), applyMask(formatPhoneBr))}
-          />
-          <p className="text-xs text-destructive">{localErrors?.phone?.message}</p>
-        </div>
+          <Field>
+            <FieldLabel htmlFor={`${scope}-phone`}>Telefone</FieldLabel>
+            <FieldContent>
+              <Input
+                id={`${scope}-phone`}
+                inputMode="tel"
+                placeholder="(00) 00000-0000"
+                {...register(textField(scope, "phone"), applyMask(formatPhoneBr))}
+              />
+              <FieldError>{localErrors?.phone?.message}</FieldError>
+            </FieldContent>
+          </Field>
 
-        <div className="space-y-2 md:col-span-2">
-          <Label htmlFor={`${scope}-address`}>Endereco</Label>
-          <Input id={`${scope}-address`} {...register(textField(scope, "address"))} />
-          <p className="text-xs text-destructive">{localErrors?.address?.message}</p>
-        </div>
+          <Field className="md:col-span-2">
+            <FieldLabel htmlFor={`${scope}-address`}>Endereco</FieldLabel>
+            <FieldContent>
+              <Input id={`${scope}-address`} {...register(textField(scope, "address"))} />
+              <FieldError>{localErrors?.address?.message}</FieldError>
+            </FieldContent>
+          </Field>
 
-        <div className="space-y-2">
-          <Label htmlFor={`${scope}-zipCode`}>CEP</Label>
-          <Input
-            id={`${scope}-zipCode`}
-            inputMode="numeric"
-            placeholder="00000-000"
-            {...register(textField(scope, "zipCode"), applyMask(formatCep))}
-          />
-          <p className="text-xs text-destructive">{localErrors?.zipCode?.message}</p>
-        </div>
+          <Field>
+            <FieldLabel htmlFor={`${scope}-zipCode`}>CEP</FieldLabel>
+            <FieldContent>
+              <Input
+                id={`${scope}-zipCode`}
+                inputMode="numeric"
+                placeholder="00000-000"
+                {...register(textField(scope, "zipCode"), applyMask(formatCep))}
+              />
+              <FieldError>{localErrors?.zipCode?.message}</FieldError>
+            </FieldContent>
+          </Field>
 
-        <div className="space-y-2">
-          <Label htmlFor={`${scope}-city`}>Cidade</Label>
-          <Input id={`${scope}-city`} {...register(textField(scope, "city"))} />
-          <p className="text-xs text-destructive">{localErrors?.city?.message}</p>
-        </div>
+          <Field>
+            <FieldLabel htmlFor={`${scope}-city`}>Cidade</FieldLabel>
+            <FieldContent>
+              <Input id={`${scope}-city`} {...register(textField(scope, "city"))} />
+              <FieldError>{localErrors?.city?.message}</FieldError>
+            </FieldContent>
+          </Field>
 
-        <div className="space-y-2">
-          <Label htmlFor={`${scope}-state`}>UF</Label>
-          <Input
-            id={`${scope}-state`}
-            maxLength={2}
-            placeholder="MG"
-            {...register(textField(scope, "state"), applyMask(formatStateCode))}
-          />
-          <p className="text-xs text-destructive">{localErrors?.state?.message}</p>
-        </div>
+          <Field>
+            <FieldLabel htmlFor={`${scope}-state`}>UF</FieldLabel>
+            <FieldContent>
+              <Input
+                id={`${scope}-state`}
+                maxLength={2}
+                placeholder="MG"
+                {...register(textField(scope, "state"), applyMask(formatStateCode))}
+              />
+              <FieldError>{localErrors?.state?.message}</FieldError>
+            </FieldContent>
+          </Field>
+        </FieldGroup>
       </CardContent>
     </Card>
   );

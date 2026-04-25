@@ -5,6 +5,7 @@ export type Database = {
         Row: {
           id: string;
           owner_id: string;
+          workspace_id: string;
           name: string;
           document: string;
           state_registration: string;
@@ -20,6 +21,7 @@ export type Database = {
         Insert: {
           id?: string;
           owner_id: string;
+          workspace_id: string;
           name: string;
           document: string;
           state_registration?: string;
@@ -39,6 +41,7 @@ export type Database = {
         Row: {
           id: string;
           owner_id: string;
+          workspace_id: string;
           name: string;
           document: string;
           state_registration: string;
@@ -53,6 +56,7 @@ export type Database = {
         Insert: {
           id?: string;
           owner_id: string;
+          workspace_id: string;
           name: string;
           document: string;
           state_registration?: string;
@@ -71,6 +75,7 @@ export type Database = {
         Row: {
           id: string;
           owner_id: string;
+          workspace_id: string;
           quote_number: string;
           issue_date: string;
           company_id: string;
@@ -91,6 +96,7 @@ export type Database = {
         Insert: {
           id?: string;
           owner_id: string;
+          workspace_id: string;
           quote_number: string;
           issue_date: string;
           company_id: string;
@@ -145,6 +151,7 @@ export type Database = {
         Row: {
           id: string;
           owner_id: string;
+          workspace_id: string;
           code: string;
           name: string;
           type: "product" | "service";
@@ -158,6 +165,7 @@ export type Database = {
         Insert: {
           id?: string;
           owner_id: string;
+          workspace_id: string;
           code: string;
           name: string;
           type: "product" | "service";
@@ -169,6 +177,140 @@ export type Database = {
           updated_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["catalog_items"]["Insert"]>;
+        Relationships: [];
+      };
+      workspaces: {
+        Row: {
+          id: string;
+          name: string;
+          slug: string;
+          created_by: string;
+          is_personal: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          slug: string;
+          created_by: string;
+          is_personal?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["workspaces"]["Insert"]>;
+        Relationships: [];
+      };
+      workspace_members: {
+        Row: {
+          id: string;
+          workspace_id: string;
+          user_id: string;
+          roles: string[];
+          status: "active" | "invited" | "disabled";
+          invited_by: string | null;
+          joined_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          workspace_id: string;
+          user_id: string;
+          roles?: string[];
+          status?: "active" | "invited" | "disabled";
+          invited_by?: string | null;
+          joined_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["workspace_members"]["Insert"]>;
+        Relationships: [];
+      };
+      workspace_invites: {
+        Row: {
+          id: string;
+          workspace_id: string;
+          email: string;
+          roles: string[];
+          token: string;
+          status: "pending" | "accepted" | "expired" | "cancelled";
+          expires_at: string;
+          invited_by: string | null;
+          accepted_by: string | null;
+          accepted_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          workspace_id: string;
+          email: string;
+          roles?: string[];
+          token: string;
+          status?: "pending" | "accepted" | "expired" | "cancelled";
+          expires_at: string;
+          invited_by?: string | null;
+          accepted_by?: string | null;
+          accepted_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["workspace_invites"]["Insert"]>;
+        Relationships: [];
+      };
+      workspace_settings: {
+        Row: {
+          workspace_id: string;
+          company_name: string;
+          company_document: string;
+          company_state_registration: string;
+          company_phone: string;
+          company_address: string;
+          company_zip_code: string;
+          company_city: string;
+          company_state: string;
+          company_logo_url: string | null;
+          default_discount_type: "fixed" | "percent";
+          default_discount_value: number;
+          default_freight: number;
+          default_tax_rate: number;
+          default_validity_days: number;
+          default_notes: string;
+          quote_prefix: string;
+          quote_sequence: number;
+          order_prefix: string;
+          order_sequence: number;
+          onboarding_completed_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          workspace_id: string;
+          company_name?: string;
+          company_document?: string;
+          company_state_registration?: string;
+          company_phone?: string;
+          company_address?: string;
+          company_zip_code?: string;
+          company_city?: string;
+          company_state?: string;
+          company_logo_url?: string | null;
+          default_discount_type?: "fixed" | "percent";
+          default_discount_value?: number;
+          default_freight?: number;
+          default_tax_rate?: number;
+          default_validity_days?: number;
+          default_notes?: string;
+          quote_prefix?: string;
+          quote_sequence?: number;
+          order_prefix?: string;
+          order_sequence?: number;
+          onboarding_completed_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["workspace_settings"]["Insert"]>;
         Relationships: [];
       };
       user_settings: {
@@ -229,6 +371,7 @@ export type Database = {
         Row: {
           id: string;
           owner_id: string;
+          workspace_id: string;
           order_number: string;
           issue_date: string;
           company_id: string;
@@ -247,6 +390,7 @@ export type Database = {
         Insert: {
           id?: string;
           owner_id: string;
+          workspace_id: string;
           order_number: string;
           issue_date: string;
           company_id: string;
