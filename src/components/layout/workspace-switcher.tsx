@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Building2 } from "lucide-react";
 import { useRouter } from "nextjs-toploader/app";
+import { useQueryClient } from "@tanstack/react-query";
 
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
@@ -19,6 +20,7 @@ type WorkspaceSwitcherProps = {
 
 export function WorkspaceSwitcher({ activeWorkspaceId, workspaces }: WorkspaceSwitcherProps) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [value, setValue] = useState(activeWorkspaceId);
   const [isPending, setIsPending] = useState(false);
 
@@ -43,6 +45,7 @@ export function WorkspaceSwitcher({ activeWorkspaceId, workspaces }: WorkspaceSw
         throw new Error("Falha ao trocar de workspace.");
       }
 
+      queryClient.clear();
       setValue(nextWorkspaceId);
       router.refresh();
     } catch {

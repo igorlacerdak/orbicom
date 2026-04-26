@@ -1,11 +1,11 @@
 import { saveOnboardingAction } from "@/app/onboarding/actions";
+import { PageHero } from "@/components/layout/page-hero";
+import { OnboardingDiscountTypeSelect } from "@/components/onboarding/onboarding-discount-type-select";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, FieldContent, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { formatSelectValue, selectLabelMaps } from "@/lib/select-labels";
 import { settingsService } from "@/server/settings-service";
 
 export const dynamic = "force-dynamic";
@@ -15,16 +15,10 @@ export default async function OnboardingPage() {
 
   return (
     <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 px-4 pb-10 pt-8 md:px-8">
-      <section className="relative overflow-hidden rounded-2xl border border-border/70 bg-card p-6 shadow-sm">
-        <div className="pointer-events-none absolute -left-10 -top-12 size-44 rounded-full bg-primary/10 blur-2xl" />
-        <div className="pointer-events-none absolute -bottom-12 right-0 size-52 rounded-full bg-accent/20 blur-3xl" />
-        <div className="relative">
-          <h1 className="font-heading text-3xl font-semibold tracking-tight text-foreground">Onboarding comercial</h1>
-          <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
-            Configure sua empresa, padroes comerciais e numeracao para iniciar operacoes no Orbicom.
-          </p>
-        </div>
-      </section>
+      <PageHero
+        title="Onboarding comercial"
+        description="Configure sua empresa, padroes comerciais e numeracao para iniciar operacoes no Orbicom."
+      />
 
       <form action={saveOnboardingAction} className="grid gap-6">
         <Card className="border-border/70 bg-card/95 shadow-sm">
@@ -102,19 +96,11 @@ export default async function OnboardingPage() {
               <Field>
                 <FieldLabel htmlFor="defaultDiscountType">Tipo de desconto</FieldLabel>
                 <FieldContent>
-                  <Select name="defaultDiscountType" defaultValue={settings.defaultDiscountType}>
-                    <SelectTrigger id="defaultDiscountType" className="w-full">
-                      <SelectValue>
-                        {formatSelectValue(selectLabelMaps.discountType, "Selecione o tipo")}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectGroup>
-                        <SelectItem value="fixed">Fixo</SelectItem>
-                        <SelectItem value="percent">Percentual</SelectItem>
-                      </SelectGroup>
-                    </SelectContent>
-                  </Select>
+                  <OnboardingDiscountTypeSelect
+                    id="defaultDiscountType"
+                    name="defaultDiscountType"
+                    defaultValue={settings.defaultDiscountType}
+                  />
                 </FieldContent>
               </Field>
               <Field>

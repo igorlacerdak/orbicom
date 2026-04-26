@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatDate } from "@/lib/formatters";
+import { formatRoleLabel } from "@/lib/role-labels";
 
 type AccessMember = {
   id: string;
@@ -200,13 +201,13 @@ export function AccessControlPanel() {
         <CardHeader>
           <CardTitle>Convidar colaborador</CardTitle>
           <CardDescription>
-            Novos convites entram sempre como <strong>operator</strong>. A edicao de roles permanece desativada nesta versao.
+            Novos convites entram sempre como <strong>Operador</strong>. A edicao de papeis permanece desativada nesta versao.
           </CardDescription>
         </CardHeader>
         <CardContent>
           {!data?.canManage ? (
             <p className="rounded-lg border border-dashed border-border px-4 py-3 text-sm text-muted-foreground">
-              Apenas owner/admin podem criar convites ou desativar colaboradores.
+              Apenas Dono/Administrador podem criar convites ou desativar colaboradores.
             </p>
           ) : (
             <form onSubmit={handleCreateInvite} className="grid gap-3 md:grid-cols-[1fr_160px_auto]">
@@ -271,7 +272,15 @@ export function AccessControlPanel() {
                           <span className="text-xs text-muted-foreground">{member.userId}</span>
                         </div>
                       </TableCell>
-                      <TableCell>{member.roles.join(", ") || "operator"}</TableCell>
+                      <TableCell>
+                        <div className="flex flex-wrap gap-1.5">
+                          {(member.roles.length > 0 ? member.roles : ["operator"]).map((role) => (
+                            <Badge key={`${member.id}-${role}`} variant="outline">
+                              {formatRoleLabel(role)}
+                            </Badge>
+                          ))}
+                        </div>
+                      </TableCell>
                       <TableCell>
                         <Badge variant={statusVariant[member.status]}>{member.status === "active" ? "Ativo" : "Desativado"}</Badge>
                       </TableCell>

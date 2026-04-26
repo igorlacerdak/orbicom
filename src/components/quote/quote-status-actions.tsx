@@ -3,6 +3,7 @@
 import { useRouter } from "nextjs-toploader/app";
 import { useState } from "react";
 import { CheckCircle2, CircleSlash2, Copy, Eye, History, MoreHorizontal, Send } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -15,6 +16,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { QuoteStatus } from "@/domain/quote.types";
+import { queryKeys } from "@/lib/query-keys";
 
 type QuoteStatusActionsProps = {
   quoteId: string;
@@ -31,6 +33,7 @@ const allowedTransitions: Record<QuoteStatus, QuoteStatus[]> = {
 
 export function QuoteStatusActions({ quoteId, status }: QuoteStatusActionsProps) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [currentStatus, setCurrentStatus] = useState<QuoteStatus>(status);
@@ -49,7 +52,19 @@ export function QuoteStatusActions({ quoteId, status }: QuoteStatusActionsProps)
     if (!response.ok) {
       setError(body.error ?? "Falha ao atualizar status.");
     } else {
-      setCurrentStatus(body.data?.status ?? nextStatus);
+      const updatedStatus = body.data?.status ?? nextStatus;
+      setCurrentStatus(updatedStatus);
+      queryClient.setQueryData(queryKeys.quotes(), (current: unknown) => {
+        if (!Array.isArray(current)) {
+          return current;
+        }
+
+        return current.map((quote) => {
+          const row = quote as { id?: string };
+          return row.id === quoteId ? { ...row, status: updatedStatus } : row;
+        });
+      });
+      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard() });
     }
 
     setLoading(false);
@@ -71,6 +86,18 @@ export function QuoteStatusActions({ quoteId, status }: QuoteStatusActionsProps)
     }
 
     setLoading(false);
+    queryClient.setQueryData(queryKeys.quotes(), (current: unknown) => {
+      if (!Array.isArray(current)) {
+        return current;
+      }
+
+      return current.map((quote) => {
+        const row = quote as { id?: string };
+        return row.id === quoteId ? { ...row, status: "converted" } : row;
+      });
+    });
+    queryClient.invalidateQueries({ queryKey: queryKeys.orders() });
+    queryClient.invalidateQueries({ queryKey: queryKeys.dashboard() });
     if (body.data?.orderId) {
       router.push(`/pedidos/${body.data.orderId}`);
     }
@@ -92,6 +119,8 @@ export function QuoteStatusActions({ quoteId, status }: QuoteStatusActionsProps)
     }
 
     setLoading(false);
+    queryClient.invalidateQueries({ queryKey: queryKeys.quotes() });
+    queryClient.invalidateQueries({ queryKey: queryKeys.dashboard() });
     router.push(`/orcamentos/${body.data.id}`);
   };
 

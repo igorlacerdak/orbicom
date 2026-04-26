@@ -1,98 +1,115 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Search } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { PageHero } from "@/components/layout/page-hero";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatDate } from "@/lib/formatters";
+import { formatDateTime } from "@/lib/formatters";
+import { getQueryMetricsSnapshot, recordQueryCacheHit, recordQueryFetch } from "@/lib/query-metrics";
+import { queryKeys } from "@/lib/query-keys";
 import type { ClientSummary } from "@/server/client-service";
 
-type ClientsListProps = {
-  initialClients: ClientSummary[];
-  initialError?: string;
+const METRIC_KEY = "clients";
+
+const fetchClients = async (search: string): Promise<ClientSummary[]> => {
+  recordQueryFetch(METRIC_KEY);
+  const params = new URLSearchParams();
+  if (search.trim()) {
+    params.set("q", search.trim());
+  }
+
+  const response = await fetch(`/api/clients?${params.toString()}`);
+  const body = (await response.json()) as { data?: ClientSummary[]; error?: string };
+
+  if (!response.ok || !body.data) {
+    throw new Error(body.error ?? "Falha ao listar clientes.");
+  }
+
+  return body.data;
 };
 
-export function ClientsList({ initialClients, initialError = "" }: ClientsListProps) {
+export function ClientsList() {
+  const hasTrackedCacheHit = useRef(false);
   const [query, setQuery] = useState("");
-  const [clients, setClients] = useState<ClientSummary[]>(initialClients);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(initialError);
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [debouncedQuery, setDebouncedQuery] = useState("");
 
-  const fetchClients = useCallback(async (search: string) => {
-    setLoading(true);
-    setError("");
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedQuery(query.trim());
+    }, 300);
 
-    const params = new URLSearchParams();
-    if (search.trim()) {
-      params.set("q", search.trim());
-    }
+    return () => clearTimeout(timer);
+  }, [query]);
 
-    const response = await fetch(`/api/clients?${params.toString()}`, { cache: "no-store" });
-    const body = (await response.json()) as { data?: ClientSummary[]; error?: string };
+  const { data, isLoading, isFetching, isFetchedAfterMount, dataUpdatedAt, error, refetch } = useQuery({
+    queryKey: queryKeys.clients(debouncedQuery),
+    queryFn: () => fetchClients(debouncedQuery),
+    placeholderData: (previous) => previous,
+  });
 
-    if (!response.ok || !body.data) {
-      setError(body.error ?? "Falha ao listar clientes.");
-      setLoading(false);
+  useEffect(() => {
+    if (hasTrackedCacheHit.current || isLoading || isFetching || isFetchedAfterMount) {
       return;
     }
 
-    setClients(body.data);
-    setLoading(false);
-  }, []);
+    recordQueryCacheHit(METRIC_KEY);
+    hasTrackedCacheHit.current = true;
+  }, [isFetchedAfterMount, isFetching, isLoading]);
 
-  const onSearchChange = (value: string) => {
-    setQuery(value);
-
-    if (debounceRef.current) {
-      clearTimeout(debounceRef.current);
-    }
-
-    debounceRef.current = setTimeout(() => {
-      void fetchClients(value);
-    }, 300);
-  };
+  const clients = data ?? [];
+  const loading = isLoading || isFetching;
+  const errorMessage = error instanceof Error ? error.message : "";
+  const resultLabel = useMemo(
+    () => (debouncedQuery ? `Resultados para \"${debouncedQuery}\"` : "Clientes cadastrados"),
+    [debouncedQuery],
+  );
+  const metric = getQueryMetricsSnapshot()[METRIC_KEY];
 
   return (
     <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 px-4 pb-10 pt-8 md:px-8">
-      <section className="relative overflow-hidden rounded-2xl border border-border/70 bg-card p-6 shadow-sm">
-        <div className="pointer-events-none absolute -left-10 -top-12 size-44 rounded-full bg-primary/10 blur-2xl" />
-        <div className="pointer-events-none absolute -bottom-12 right-0 size-52 rounded-full bg-accent/20 blur-3xl" />
-        <div className="relative flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-          <div>
-            <h1 className="font-heading text-3xl font-semibold tracking-tight text-foreground">Clientes</h1>
-            <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-              Consulte sua base de clientes e encontre registros rapidamente por nome, documento ou cidade.
-            </p>
-          </div>
-
+      <PageHero
+        title="Clientes"
+        description="Consulte sua base de clientes e encontre registros rapidamente por nome, documento ou cidade."
+        descriptionClassName="max-w-2xl text-sm text-muted-foreground"
+        actions={
           <div className="flex w-full max-w-md items-center gap-2">
             <Input
               value={query}
-              onChange={(event) => onSearchChange(event.target.value)}
+              onChange={(event) => setQuery(event.target.value)}
               placeholder="Buscar por nome, documento ou cidade"
             />
-            <Button type="button" variant="outline" onClick={() => void fetchClients(query)}>
+            <Button type="button" variant="outline" onClick={() => void refetch()}>
               <Search data-icon="inline-start" />
               Buscar
             </Button>
           </div>
-        </div>
-      </section>
+        }
+      />
 
       <Card className="border-border/70 bg-card/95 shadow-sm">
         <CardHeader>
-          <CardTitle>Clientes cadastrados</CardTitle>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <CardTitle>{resultLabel}</CardTitle>
+            <Button type="button" size="sm" variant="outline" onClick={() => void refetch()}>
+              Atualizar agora
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Atualizado em {dataUpdatedAt ? formatDateTime(dataUpdatedAt) : "--"} · fetches: {metric?.fetches ?? 0} · cache hits: {metric?.cacheHits ?? 0}
+          </p>
         </CardHeader>
         <CardContent className="overflow-x-auto">
-          {error ? (
+          {errorMessage ? (
             <p className="mb-4 rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
-              {error}
+              {errorMessage}
             </p>
           ) : null}
 

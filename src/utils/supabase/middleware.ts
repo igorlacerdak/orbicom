@@ -43,10 +43,15 @@ export const updateSession = async (request: NextRequest) => {
   } = await supabase.auth.getUser();
 
   const isAuthRoute = pathname.startsWith("/auth");
+  const isWelcomeRoute = pathname.startsWith("/boas-vindas");
   const isOnboardingRoute = pathname.startsWith("/onboarding");
+  const isCompanyPendingRoute = pathname.startsWith("/empresa-em-configuracao");
   const isProtectedPage =
     pathname === "/" ||
+    pathname.startsWith("/dev") ||
+    pathname.startsWith("/boas-vindas") ||
     pathname.startsWith("/onboarding") ||
+    pathname.startsWith("/empresa-em-configuracao") ||
     pathname.startsWith("/configuracoes") ||
     pathname.startsWith("/dashboard") ||
     pathname.startsWith("/orcamentos") ||
@@ -54,6 +59,7 @@ export const updateSession = async (request: NextRequest) => {
     pathname.startsWith("/catalogo") ||
     pathname.startsWith("/pedidos");
   const isProtectedApi =
+    pathname.startsWith("/api/dashboard") ||
     pathname.startsWith("/api/quotes") ||
     pathname.startsWith("/api/companies") ||
     pathname.startsWith("/api/clients") ||
@@ -85,7 +91,7 @@ export const updateSession = async (request: NextRequest) => {
   if (user && !isAuthRoute) {
     const { data: memberships, error: membershipsError } = await supabase
       .from("workspace_members")
-      .select("workspace_id")
+      .select("workspace_id,roles")
       .eq("user_id", user.id)
       .eq("status", "active");
 
@@ -98,10 +104,32 @@ export const updateSession = async (request: NextRequest) => {
     }
 
     const activeMemberships = memberships ?? [];
+
+    if (activeMemberships.length === 0) {
+      const canUseNoWorkspaceApi =
+        pathname.startsWith("/api/workspaces/create") || pathname.startsWith("/api/workspaces/invites/accept");
+
+      if (isProtectedApi && !canUseNoWorkspaceApi) {
+        return NextResponse.json({ error: "Sem workspace ativo. Crie ou participe de uma empresa." }, { status: 403 });
+      }
+
+      if (!isProtectedApi && !isWelcomeRoute) {
+        return NextResponse.redirect(new URL("/boas-vindas", request.url));
+      }
+
+      return response;
+    }
+
     const requestedWorkspaceId = request.cookies.get(WORKSPACE_COOKIE)?.value;
-    const activeWorkspaceId =
-      activeMemberships.find((membership) => membership.workspace_id === requestedWorkspaceId)?.workspace_id ??
-      activeMemberships[0]?.workspace_id;
+    const activeMembership =
+      activeMemberships.find((membership) => membership.workspace_id === requestedWorkspaceId) ?? activeMemberships[0];
+    const activeWorkspaceId = activeMembership?.workspace_id;
+    const activeRoles = Array.isArray(activeMembership?.roles) ? activeMembership.roles : [];
+    const canConfigureWorkspace = activeRoles.some((role) => role === "owner" || role === "admin");
+
+    if (isWelcomeRoute) {
+      return NextResponse.redirect(new URL("/dashboard", request.url));
+    }
 
     if (activeWorkspaceId && activeWorkspaceId !== requestedWorkspaceId) {
       response.cookies.set(WORKSPACE_COOKIE, activeWorkspaceId, {
@@ -121,15 +149,27 @@ export const updateSession = async (request: NextRequest) => {
 
     const onboardingCompleted = Boolean(settings?.onboarding_completed_at);
 
-    if (!onboardingCompleted && !isOnboardingRoute && !pathname.startsWith("/api/settings")) {
-      if (isProtectedApi) {
-        return NextResponse.json({ error: "Conclua o onboarding do workspace ativo." }, { status: 403 });
-      }
+    if (!onboardingCompleted) {
+      if (canConfigureWorkspace) {
+        if (!isOnboardingRoute && !pathname.startsWith("/api/settings") && !pathname.startsWith("/api/workspaces")) {
+          if (isProtectedApi) {
+            return NextResponse.json({ error: "Conclua o onboarding do workspace ativo." }, { status: 403 });
+          }
 
-      return NextResponse.redirect(new URL("/onboarding", request.url));
+          return NextResponse.redirect(new URL("/onboarding", request.url));
+        }
+      } else {
+        if (isProtectedApi && !pathname.startsWith("/api/workspaces")) {
+          return NextResponse.json({ error: "Workspace em configuracao. Aguarde o onboarding ser concluido." }, { status: 403 });
+        }
+
+        if (!isCompanyPendingRoute) {
+          return NextResponse.redirect(new URL("/empresa-em-configuracao", request.url));
+        }
+      }
     }
 
-    if (onboardingCompleted && isOnboardingRoute) {
+    if (onboardingCompleted && (isOnboardingRoute || isCompanyPendingRoute)) {
       return NextResponse.redirect(new URL("/dashboard", request.url));
     }
   }

@@ -1,6 +1,6 @@
 import { cookies } from 'next/headers';
 
-import { UnauthorizedError } from '@/server/errors';
+import { MissingWorkspaceError, UnauthorizedError } from '@/server/errors';
 import { createClient } from '@/utils/supabase/server';
 
 export const WORKSPACE_COOKIE = 'orbicom_workspace_id';
@@ -65,57 +65,6 @@ const normalizeWorkspace = (workspace: RawWorkspaceMembershipRow['workspaces']) 
   return Array.isArray(workspace) ? (workspace[0] ?? null) : workspace;
 };
 
-const bootstrapWorkspace = async (userId: string) => {
-  const supabase = await createClient();
-  const slug = `personal-${userId.slice(0, 8)}-${Date.now().toString(36)}`;
-
-  const { data: workspace, error: workspaceError } = await supabase
-    .from('workspaces')
-    .insert({
-      name: 'Workspace principal',
-      slug,
-      created_by: userId,
-      is_personal: true,
-    })
-    .select('id,name,slug')
-    .single();
-
-  if (workspaceError) {
-    throw new Error(
-      `Falha ao criar workspace inicial: ${workspaceError.message}`,
-    );
-  }
-
-  const { error: membershipError } = await supabase
-    .from('workspace_members')
-    .insert({
-      workspace_id: workspace.id,
-      user_id: userId,
-      roles: ['owner', 'admin', 'operator', 'finance'],
-      status: 'active',
-      joined_at: new Date().toISOString(),
-    });
-
-  if (membershipError) {
-    throw new Error(
-      `Falha ao criar membro inicial do workspace: ${membershipError.message}`,
-    );
-  }
-
-  return {
-    workspaceId: workspace.id,
-    roles: ['owner', 'admin', 'operator', 'finance'] as WorkspaceRole[],
-    workspaces: [
-      {
-        id: workspace.id,
-        name: workspace.name,
-        slug: workspace.slug,
-        roles: ['owner', 'admin', 'operator', 'finance'] as WorkspaceRole[],
-      },
-    ],
-  };
-};
-
 export const hasAnyRole = (roles: WorkspaceRole[], expected: WorkspaceRole[]) =>
   expected.some((role) => roles.includes(role));
 
@@ -150,13 +99,7 @@ export async function getWorkspaceContext(): Promise<WorkspaceContext> {
     .filter((row): row is WorkspaceMembershipRow => Boolean(row.workspaces));
 
   if (memberships.length === 0) {
-    const bootstrapped = await bootstrapWorkspace(user.id);
-    return {
-      userId: user.id,
-      workspaceId: bootstrapped.workspaceId,
-      roles: bootstrapped.roles,
-      workspaces: bootstrapped.workspaces,
-    };
+    throw new MissingWorkspaceError();
   }
 
   const cookieStore = await cookies();

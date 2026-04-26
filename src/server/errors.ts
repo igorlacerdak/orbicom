@@ -11,3 +11,10 @@ export class ForbiddenError extends Error {
     this.name = "ForbiddenError";
   }
 }
+
+export class MissingWorkspaceError extends Error {
+  constructor(message = "Usuario sem workspace ativo.") {
+    super(message);
+    this.name = "MissingWorkspaceError";
+  }
+}

@@ -5,6 +5,7 @@ import { useRouter } from 'nextjs-toploader/app';
 import { useMemo, useState } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Save, FileDown, ArrowLeft } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useFieldArray, useForm, useWatch } from 'react-hook-form';
 
 import { calculateQuoteTotals } from '@/domain/quote.calculations';
@@ -22,6 +23,7 @@ import { LogoUpload } from '@/components/quote/logo-upload';
 import { PartyFields } from '@/components/quote/party-fields';
 import { QuotePreview } from '@/components/quote/quote-preview';
 import { TotalsCard } from '@/components/quote/totals-card';
+import { queryKeys } from '@/lib/query-keys';
 import { buildDefaultQuoteNotes } from '@/lib/quote-notes';
 
 type QuoteFormProps = {
@@ -57,6 +59,7 @@ const buildQuotePayload = (values: QuoteFormInput): QuoteFormInput => ({
 
 export const QuoteForm = ({ initialQuote, mode, initialCatalogItems = [] }: QuoteFormProps) => {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [notice, setNotice] = useState('');
   const [pdfLoading, setPdfLoading] = useState(false);
   const [catalogItems] = useState<CatalogItem[]>(initialCatalogItems);
@@ -169,6 +172,18 @@ export const QuoteForm = ({ initialQuote, mode, initialCatalogItems = [] }: Quot
   const onSave = async (values: QuoteFormInput) => {
     try {
       const savedQuote = await persistQuote(values);
+      queryClient.setQueryData(queryKeys.quotes(), (current: unknown) => {
+        if (!Array.isArray(current)) {
+          return [savedQuote];
+        }
+
+        const withoutCurrent = current.filter((item) => {
+          const row = item as { id?: string };
+          return row.id !== savedQuote.id;
+        });
+        return [savedQuote, ...withoutCurrent];
+      });
+      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard() });
       setNotice('Orbicom: orcamento salvo com sucesso.');
 
       if (mode === 'create') {

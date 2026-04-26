@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -26,7 +27,12 @@ import {
 } from '@/components/ui/table';
 import { CatalogItem, CatalogItemType } from '@/domain/catalog.types';
 import { MEASUREMENT_UNITS } from '@/domain/quote.types';
+import { formatDateTime } from '@/lib/formatters';
+import { getQueryMetricsSnapshot, recordQueryCacheHit, recordQueryFetch } from '@/lib/query-metrics';
+import { queryKeys } from '@/lib/query-keys';
 import { formatSelectValue, selectLabelMaps } from '@/lib/select-labels';
+
+const METRIC_KEY = 'catalog-items';
 
 type FormState = {
   id?: string;
@@ -49,13 +55,71 @@ const emptyForm: FormState = {
   active: true,
 };
 
-type CatalogManagerProps = {
-  initialItems: CatalogItem[];
+const buildEndpoint = (filters: { q: string; type: CatalogItemType | 'all'; showInactive: boolean }) => {
+  const params = new URLSearchParams();
+  if (filters.q.trim()) {
+    params.set('q', filters.q.trim());
+  }
+  params.set('type', filters.type);
+  if (!filters.showInactive) {
+    params.set('active', 'true');
+  }
+  return `/api/catalog/items?${params.toString()}`;
 };
 
-export function CatalogManager({ initialItems }: CatalogManagerProps) {
-  const [items, setItems] = useState<CatalogItem[]>(initialItems);
-  const [loading, setLoading] = useState(false);
+const fetchCatalogItems = async (filters: { q: string; type: CatalogItemType | 'all'; showInactive: boolean }) => {
+  recordQueryFetch(METRIC_KEY);
+  const response = await fetch(buildEndpoint(filters));
+  const body = (await response.json()) as {
+    data?: CatalogItem[];
+    error?: string;
+  };
+
+  if (!response.ok || !body.data) {
+    throw new Error(body.error ?? 'Falha ao carregar itens do catalogo.');
+  }
+
+  return body.data;
+};
+
+const itemMatchesFilters = (
+  item: CatalogItem,
+  filters: { q: string; type: CatalogItemType | 'all'; showInactive: boolean },
+) => {
+  const query = filters.q.trim().toLowerCase();
+  if (!filters.showInactive && !item.active) {
+    return false;
+  }
+
+  if (filters.type !== 'all' && item.type !== filters.type) {
+    return false;
+  }
+
+  if (!query) {
+    return true;
+  }
+
+  return item.code.toLowerCase().includes(query) || item.name.toLowerCase().includes(query);
+};
+
+const upsertItemOnList = (
+  list: CatalogItem[] | undefined,
+  nextItem: CatalogItem,
+  filters: { q: string; type: CatalogItemType | 'all'; showInactive: boolean },
+) => {
+  const current = list ?? [];
+  const withoutItem = current.filter((item) => item.id !== nextItem.id);
+
+  if (!itemMatchesFilters(nextItem, filters)) {
+    return withoutItem;
+  }
+
+  return [nextItem, ...withoutItem].sort((a, b) => a.code.localeCompare(b.code) || a.name.localeCompare(b.name));
+};
+
+export function CatalogManager() {
+  const hasTrackedCacheHit = useRef(false);
+  const queryClient = useQueryClient();
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState('');
   const [q, setQ] = useState('');
@@ -63,89 +127,133 @@ export function CatalogManager({ initialItems }: CatalogManagerProps) {
   const [showInactive, setShowInactive] = useState(false);
   const [form, setForm] = useState<FormState>(emptyForm);
 
-  const buildEndpoint = () => {
-    const params = new URLSearchParams();
-    if (q.trim()) {
-      params.set('q', q.trim());
-    }
-    params.set('type', type);
-    if (!showInactive) {
-      params.set('active', 'true');
-    }
-    return `/api/catalog/items?${params.toString()}`;
-  };
+  const filters = useMemo(() => ({ q, type, showInactive }), [q, showInactive, type]);
 
-  const load = async () => {
-    setLoading(true);
-    setError('');
-    const response = await fetch(buildEndpoint(), { cache: 'no-store' });
-    const body = (await response.json()) as {
-      data?: CatalogItem[];
-      error?: string;
-    };
-    if (!response.ok || !body.data) {
-      setError(body.error ?? 'Falha ao carregar itens do catalogo.');
-      setLoading(false);
+  const {
+    data: items = [],
+    isLoading,
+    isFetching,
+    isFetchedAfterMount,
+    dataUpdatedAt,
+    error: loadError,
+    refetch,
+  } = useQuery({
+    queryKey: queryKeys.catalogItems(filters),
+    queryFn: () => fetchCatalogItems(filters),
+    placeholderData: (previousData) => previousData,
+  });
+
+  useEffect(() => {
+    if (hasTrackedCacheHit.current || isLoading || isFetching || isFetchedAfterMount) {
       return;
     }
 
-    setItems(body.data);
-    setLoading(false);
+    recordQueryCacheHit(METRIC_KEY);
+    hasTrackedCacheHit.current = true;
+  }, [isFetchedAfterMount, isFetching, isLoading]);
+
+  const metric = getQueryMetricsSnapshot()[METRIC_KEY];
+
+  const applyItemToCatalogCache = (nextItem: CatalogItem) => {
+    const cachedEntries = queryClient.getQueriesData<CatalogItem[]>({ queryKey: ['catalog-items'] });
+    for (const [queryKey, list] of cachedEntries) {
+      const [, cachedQ = '', cachedType = 'all', cachedShowInactive = false] = queryKey as [
+        string,
+        string,
+        CatalogItemType | 'all',
+        boolean,
+      ];
+
+      const cachedFilters = {
+        q: cachedQ,
+        type: cachedType,
+        showInactive: cachedShowInactive,
+      };
+
+      queryClient.setQueryData(queryKey, upsertItemOnList(list, nextItem, cachedFilters));
+    }
+
+    if (cachedEntries.length === 0) {
+      queryClient.setQueryData<CatalogItem[]>(queryKeys.catalogItems(filters), (oldData) =>
+        upsertItemOnList(oldData, nextItem, filters),
+      );
+    }
   };
 
-  const save = async () => {
-    setActionLoading(true);
-    setError('');
-    const payload = {
-      code: form.code,
-      name: form.name,
-      type: form.type,
-      unit: form.unit,
-      defaultUnitPrice: form.defaultUnitPrice,
-      allowCustomDescription: form.allowCustomDescription,
-      active: form.active,
-    };
+  const saveMutation = useMutation({
+    mutationFn: async (payload: FormState) => {
+      const body = {
+        code: payload.code,
+        name: payload.name,
+        type: payload.type,
+        unit: payload.unit,
+        defaultUnitPrice: payload.defaultUnitPrice,
+        allowCustomDescription: payload.allowCustomDescription,
+        active: payload.active,
+      };
 
-    const isEdit = Boolean(form.id);
-    const response = await fetch(
-      isEdit ? `/api/catalog/items/${form.id}` : '/api/catalog/items',
-      {
+      const isEdit = Boolean(payload.id);
+      const response = await fetch(isEdit ? `/api/catalog/items/${payload.id}` : '/api/catalog/items', {
         method: isEdit ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      },
-    );
+        body: JSON.stringify(body),
+      });
 
-    const body = (await response.json()) as { error?: string };
-    if (!response.ok) {
-      setError(body.error ?? 'Falha ao salvar item do catalogo.');
+      const result = (await response.json()) as { data?: CatalogItem; error?: string };
+      if (!response.ok || !result.data) {
+        throw new Error(result.error ?? 'Falha ao salvar item do catalogo.');
+      }
+
+      return result.data;
+    },
+    onMutate: () => {
+      setActionLoading(true);
+      setError('');
+    },
+    onSuccess: (savedItem) => {
+      applyItemToCatalogCache(savedItem);
+      setForm(emptyForm);
+    },
+    onError: (mutationError) => {
+      setError(mutationError instanceof Error ? mutationError.message : 'Falha ao salvar item do catalogo.');
+    },
+    onSettled: () => {
       setActionLoading(false);
-      return;
-    }
+    },
+  });
 
-    setForm(emptyForm);
-    await load();
-    setActionLoading(false);
-  };
+  const toggleMutation = useMutation({
+    mutationFn: async ({ id, active }: { id: string; active: boolean }) => {
+      const response = await fetch(`/api/catalog/items/${id}/active`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ active }),
+      });
 
-  const toggleActive = async (id: string, active: boolean) => {
-    setActionLoading(true);
-    const response = await fetch(`/api/catalog/items/${id}/active`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ active }),
-    });
+      const result = (await response.json()) as { data?: CatalogItem; error?: string };
+      if (!response.ok || !result.data) {
+        throw new Error(result.error ?? 'Falha ao atualizar status do item.');
+      }
 
-    if (!response.ok) {
-      const body = (await response.json()) as { error?: string };
-      setError(body.error ?? 'Falha ao atualizar status do item.');
+      return result.data;
+    },
+    onMutate: () => {
+      setActionLoading(true);
+      setError('');
+    },
+    onSuccess: (updatedItem) => {
+      applyItemToCatalogCache(updatedItem);
+    },
+    onError: (mutationError) => {
+      setError(mutationError instanceof Error ? mutationError.message : 'Falha ao atualizar status do item.');
+    },
+    onSettled: () => {
       setActionLoading(false);
-      return;
-    }
+    },
+  });
 
-    await load();
-    setActionLoading(false);
-  };
+  const loading = isLoading || isFetching;
+  const loadErrorMessage = loadError instanceof Error ? loadError.message : '';
 
   return (
     <div className="flex flex-col gap-6">
@@ -245,7 +353,7 @@ export function CatalogManager({ initialItems }: CatalogManagerProps) {
           </div>
 
           <div className="md:col-span-4 flex flex-wrap gap-2">
-            <Button type="button" onClick={save} disabled={actionLoading}>
+            <Button type="button" onClick={() => saveMutation.mutate(form)} disabled={actionLoading}>
               {actionLoading
                 ? form.id
                   ? 'Atualizando...'
@@ -271,7 +379,15 @@ export function CatalogManager({ initialItems }: CatalogManagerProps) {
 
       <Card className="border-border/70 bg-card/95 shadow-sm">
         <CardHeader>
-          <CardTitle>Itens do catalogo</CardTitle>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <CardTitle>Itens do catalogo</CardTitle>
+            <Button type="button" size="sm" variant="outline" onClick={() => void refetch()}>
+              Atualizar agora
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Atualizado em {dataUpdatedAt ? formatDateTime(dataUpdatedAt) : '--'} · fetches: {metric?.fetches ?? 0} · cache hits: {metric?.cacheHits ?? 0}
+          </p>
         </CardHeader>
         <CardContent className="flex flex-col gap-3 overflow-x-auto">
           <div className="grid gap-2 md:grid-cols-4">
@@ -307,10 +423,12 @@ export function CatalogManager({ initialItems }: CatalogManagerProps) {
               />
               <Label htmlFor="showInactive">Mostrar inativos</Label>
             </div>
-            <Button type="button" variant="outline" onClick={load}>
+            <Button type="button" variant="outline" onClick={() => void refetch()}>
               Aplicar filtros
             </Button>
           </div>
+
+          {loadErrorMessage ? <p className="text-sm text-destructive">{loadErrorMessage}</p> : null}
 
           <Table>
             <TableHeader>
@@ -382,7 +500,7 @@ export function CatalogManager({ initialItems }: CatalogManagerProps) {
                           size="sm"
                           variant="ghost"
                           disabled={loading}
-                          onClick={() => toggleActive(item.id, !item.active)}
+                          onClick={() => toggleMutation.mutate({ id: item.id, active: !item.active })}
                         >
                           {item.active ? 'Inativar' : 'Ativar'}
                         </Button>

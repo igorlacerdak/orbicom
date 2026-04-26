@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { BarChart3, Building2, ClipboardList, FileText, PackageSearch, Settings2, Users } from 'lucide-react';
+import { Activity, BarChart3, Building2, ClipboardList, FileText, PackageSearch, Settings2, Users } from 'lucide-react';
 
 import { NavUser } from '@/components/layout/nav-user';
 import {
@@ -62,6 +62,11 @@ const navigation = [
         title: 'Controle de acesso',
         href: '/configuracoes/acesso',
         icon: Settings2,
+      },
+      {
+        title: 'Cache metrics',
+        href: '/dev/cache-metrics',
+        icon: Activity,
       },
     ],
   },

@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import { ForbiddenError } from "@/server/errors";
+import { ForbiddenError, UnauthorizedError } from "@/server/errors";
 import { getWorkspaceContext, hasAnyRole } from "@/server/workspace-context";
 import type { WorkspaceRole } from "@/server/workspace-context";
 import { createClient } from "@/utils/supabase/server";
@@ -51,18 +51,113 @@ const assertCanManageAccess = (roles: WorkspaceRole[]) => {
 
 const normalizeEmail = (value: string) => value.trim().toLowerCase();
 
+const slugify = (value: string) =>
+  value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 48);
+
 export const workspaceService = {
-  async list(): Promise<{ activeWorkspaceId: string; workspaces: WorkspaceSummary[] }> {
-    const workspace = await getWorkspaceContext();
+  async createWorkspace(input: { name: string }) {
+    const supabase = await createClient();
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
+
+    if (userError || !user) {
+      throw new UnauthorizedError();
+    }
+
+    const name = input.name.trim();
+    if (!name) {
+      throw new Error("Informe o nome da empresa.");
+    }
+
+    const baseSlug = slugify(name) || `workspace-${Date.now().toString(36)}`;
+    const slug = `${baseSlug}-${randomUUID().slice(0, 6)}`;
+
+    const { data: workspace, error: workspaceError } = await supabase
+      .from("workspaces")
+      .insert({
+        name,
+        slug,
+        created_by: user.id,
+        is_personal: false,
+      })
+      .select("id,name,slug")
+      .single();
+
+    if (workspaceError) {
+      throw new Error(`Falha ao criar empresa/workspace: ${workspaceError.message}`);
+    }
+
+    const { error: membershipError } = await supabase.from("workspace_members").insert({
+      workspace_id: workspace.id,
+      user_id: user.id,
+      roles: ["owner", "admin", "operator", "finance"],
+      status: "active",
+      joined_at: new Date().toISOString(),
+    });
+
+    if (membershipError) {
+      throw new Error(`Falha ao vincular usuario ao workspace: ${membershipError.message}`);
+    }
+
     return {
-      activeWorkspaceId: workspace.workspaceId,
-      workspaces: workspace.workspaces.map((item) => ({
-        id: item.id,
-        name: item.name,
-        slug: item.slug,
-        roles: item.roles,
-        isActive: item.id === workspace.workspaceId,
-      })),
+      workspaceId: workspace.id,
+      workspaceName: workspace.name,
+      workspaceSlug: workspace.slug,
+    };
+  },
+
+  async list(): Promise<{ activeWorkspaceId: string | null; workspaces: WorkspaceSummary[] }> {
+    const supabase = await createClient();
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
+
+    if (userError || !user) {
+      throw new UnauthorizedError();
+    }
+
+    const { data, error } = await supabase
+      .from("workspace_members")
+      .select("workspace_id,roles,status,workspaces(id,name,slug)")
+      .eq("user_id", user.id)
+      .eq("status", "active");
+
+    if (error) {
+      throw new Error(`Falha ao listar workspaces do usuario: ${error.message}`);
+    }
+
+    const memberships = (data ?? []).map((row) => {
+      const workspace = Array.isArray(row.workspaces) ? row.workspaces[0] : row.workspaces;
+      return {
+        workspaceId: row.workspace_id,
+        roles: row.roles ?? [],
+        workspace,
+      };
+    });
+
+    const activeWorkspaceId = memberships[0]?.workspaceId ?? null;
+
+    return {
+      activeWorkspaceId,
+      workspaces: memberships
+        .filter((membership) => membership.workspace)
+        .map((membership) => ({
+          id: membership.workspaceId,
+          name: membership.workspace?.name ?? "Workspace",
+          slug: membership.workspace?.slug ?? "workspace",
+          roles: membership.roles,
+          isActive: membership.workspaceId === activeWorkspaceId,
+        }))
+        .sort((a, b) => Number(b.isActive) - Number(a.isActive)),
     };
   },
 
