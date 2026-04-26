@@ -1,8 +1,10 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { Plus } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
+import { UpsertCatalogItemDialog } from '@/components/catalog/upsert-catalog-item-dialog';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -25,37 +27,24 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { type CatalogItemInput } from '@/domain/catalog.schema';
 import { CatalogItem, CatalogItemType } from '@/domain/catalog.types';
-import { MEASUREMENT_UNITS } from '@/domain/quote.types';
 import { formatDateTime } from '@/lib/formatters';
-import { getQueryMetricsSnapshot, recordQueryCacheHit, recordQueryFetch } from '@/lib/query-metrics';
+import {
+  getQueryMetricsSnapshot,
+  recordQueryCacheHit,
+  recordQueryFetch,
+} from '@/lib/query-metrics';
 import { queryKeys } from '@/lib/query-keys';
 import { formatSelectValue, selectLabelMaps } from '@/lib/select-labels';
 
 const METRIC_KEY = 'catalog-items';
 
-type FormState = {
-  id?: string;
-  code: string;
-  name: string;
-  type: CatalogItemType;
-  unit: 'UN' | 'KG' | 'TON';
-  defaultUnitPrice: number;
-  allowCustomDescription: boolean;
-  active: boolean;
-};
-
-const emptyForm: FormState = {
-  code: '',
-  name: '',
-  type: 'product',
-  unit: 'UN',
-  defaultUnitPrice: 0,
-  allowCustomDescription: false,
-  active: true,
-};
-
-const buildEndpoint = (filters: { q: string; type: CatalogItemType | 'all'; showInactive: boolean }) => {
+const buildEndpoint = (filters: {
+  q: string;
+  type: CatalogItemType | 'all';
+  showInactive: boolean;
+}) => {
   const params = new URLSearchParams();
   if (filters.q.trim()) {
     params.set('q', filters.q.trim());
@@ -67,7 +56,11 @@ const buildEndpoint = (filters: { q: string; type: CatalogItemType | 'all'; show
   return `/api/catalog/items?${params.toString()}`;
 };
 
-const fetchCatalogItems = async (filters: { q: string; type: CatalogItemType | 'all'; showInactive: boolean }) => {
+const fetchCatalogItems = async (filters: {
+  q: string;
+  type: CatalogItemType | 'all';
+  showInactive: boolean;
+}) => {
   recordQueryFetch(METRIC_KEY);
   const response = await fetch(buildEndpoint(filters));
   const body = (await response.json()) as {
@@ -99,7 +92,10 @@ const itemMatchesFilters = (
     return true;
   }
 
-  return item.code.toLowerCase().includes(query) || item.name.toLowerCase().includes(query);
+  return (
+    item.code.toLowerCase().includes(query) ||
+    item.name.toLowerCase().includes(query)
+  );
 };
 
 const upsertItemOnList = (
@@ -114,18 +110,24 @@ const upsertItemOnList = (
     return withoutItem;
   }
 
-  return [nextItem, ...withoutItem].sort((a, b) => a.code.localeCompare(b.code) || a.name.localeCompare(b.name));
+  return [...withoutItem, nextItem].sort(
+    (a, b) => a.code.localeCompare(b.code) || a.name.localeCompare(b.name),
+  );
 };
 
 export function CatalogManager() {
   const hasTrackedCacheHit = useRef(false);
   const queryClient = useQueryClient();
-  const [actionLoading, setActionLoading] = useState(false);
-  const [error, setError] = useState('');
   const [q, setQ] = useState('');
   const [type, setType] = useState<CatalogItemType | 'all'>('all');
   const [showInactive, setShowInactive] = useState(false);
-  const [form, setForm] = useState<FormState>(emptyForm);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [dialogMode, setDialogMode] = useState<'create' | 'edit'>('create');
+  const [editingItem, setEditingItem] = useState<CatalogItem | null>(null);
+  const [dialogError, setDialogError] = useState('');
+  const [toggleError, setToggleError] = useState('');
+  const [toastMessage, setToastMessage] = useState('');
+  const [toastVariant, setToastVariant] = useState<'success' | 'error'>('success');
 
   const filters = useMemo(() => ({ q, type, showInactive }), [q, showInactive, type]);
 
@@ -155,14 +157,13 @@ export function CatalogManager() {
   const metric = getQueryMetricsSnapshot()[METRIC_KEY];
 
   const applyItemToCatalogCache = (nextItem: CatalogItem) => {
-    const cachedEntries = queryClient.getQueriesData<CatalogItem[]>({ queryKey: ['catalog-items'] });
+    const cachedEntries = queryClient.getQueriesData<CatalogItem[]>({
+      queryKey: ['catalog-items'],
+    });
+
     for (const [queryKey, list] of cachedEntries) {
-      const [, cachedQ = '', cachedType = 'all', cachedShowInactive = false] = queryKey as [
-        string,
-        string,
-        CatalogItemType | 'all',
-        boolean,
-      ];
+      const [, cachedQ = '', cachedType = 'all', cachedShowInactive = false] =
+        queryKey as [string, string, CatalogItemType | 'all', boolean];
 
       const cachedFilters = {
         q: cachedQ,
@@ -170,36 +171,44 @@ export function CatalogManager() {
         showInactive: cachedShowInactive,
       };
 
-      queryClient.setQueryData(queryKey, upsertItemOnList(list, nextItem, cachedFilters));
+      queryClient.setQueryData(
+        queryKey,
+        upsertItemOnList(list, nextItem, cachedFilters),
+      );
     }
 
     if (cachedEntries.length === 0) {
-      queryClient.setQueryData<CatalogItem[]>(queryKeys.catalogItems(filters), (oldData) =>
-        upsertItemOnList(oldData, nextItem, filters),
+      queryClient.setQueryData<CatalogItem[]>(
+        queryKeys.catalogItems(filters),
+        (oldData) => upsertItemOnList(oldData, nextItem, filters),
       );
     }
   };
 
   const saveMutation = useMutation({
-    mutationFn: async (payload: FormState) => {
-      const body = {
-        code: payload.code,
-        name: payload.name,
-        type: payload.type,
-        unit: payload.unit,
-        defaultUnitPrice: payload.defaultUnitPrice,
-        allowCustomDescription: payload.allowCustomDescription,
-        active: payload.active,
-      };
-
-      const isEdit = Boolean(payload.id);
-      const response = await fetch(isEdit ? `/api/catalog/items/${payload.id}` : '/api/catalog/items', {
-        method: isEdit ? 'PUT' : 'POST',
+    mutationFn: async ({
+      mode,
+      itemId,
+      payload,
+    }: {
+      mode: 'create' | 'edit';
+      itemId?: string;
+      payload: CatalogItemInput;
+    }) => {
+      const endpoint =
+        mode === 'edit' && itemId
+          ? `/api/catalog/items/${itemId}`
+          : '/api/catalog/items';
+      const response = await fetch(endpoint, {
+        method: mode === 'edit' ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+        body: JSON.stringify(payload),
       });
 
-      const result = (await response.json()) as { data?: CatalogItem; error?: string };
+      const result = (await response.json()) as {
+        data?: CatalogItem;
+        error?: string;
+      };
       if (!response.ok || !result.data) {
         throw new Error(result.error ?? 'Falha ao salvar item do catalogo.');
       }
@@ -207,18 +216,22 @@ export function CatalogManager() {
       return result.data;
     },
     onMutate: () => {
-      setActionLoading(true);
-      setError('');
+      setDialogError('');
     },
     onSuccess: (savedItem) => {
       applyItemToCatalogCache(savedItem);
-      setForm(emptyForm);
+      setDialogOpen(false);
+      setEditingItem(null);
+      setToastVariant('success');
+      setToastMessage(dialogMode === 'edit' ? 'Item atualizado com sucesso.' : 'Item cadastrado com sucesso.');
     },
     onError: (mutationError) => {
-      setError(mutationError instanceof Error ? mutationError.message : 'Falha ao salvar item do catalogo.');
-    },
-    onSettled: () => {
-      setActionLoading(false);
+      const message = mutationError instanceof Error
+        ? mutationError.message
+        : 'Falha ao salvar item do catalogo.';
+      setDialogError(message);
+      setToastVariant('error');
+      setToastMessage(message);
     },
   });
 
@@ -230,7 +243,10 @@ export function CatalogManager() {
         body: JSON.stringify({ active }),
       });
 
-      const result = (await response.json()) as { data?: CatalogItem; error?: string };
+      const result = (await response.json()) as {
+        data?: CatalogItem;
+        error?: string;
+      };
       if (!response.ok || !result.data) {
         throw new Error(result.error ?? 'Falha ao atualizar status do item.');
       }
@@ -238,155 +254,109 @@ export function CatalogManager() {
       return result.data;
     },
     onMutate: () => {
-      setActionLoading(true);
-      setError('');
+      setToggleError('');
     },
     onSuccess: (updatedItem) => {
       applyItemToCatalogCache(updatedItem);
+      setToastVariant('success');
+      setToastMessage(updatedItem.active ? 'Item ativado com sucesso.' : 'Item inativado com sucesso.');
     },
     onError: (mutationError) => {
-      setError(mutationError instanceof Error ? mutationError.message : 'Falha ao atualizar status do item.');
-    },
-    onSettled: () => {
-      setActionLoading(false);
+      const message = mutationError instanceof Error
+        ? mutationError.message
+        : 'Falha ao atualizar status do item.';
+      setToggleError(message);
+      setToastVariant('error');
+      setToastMessage(message);
     },
   });
+
+  useEffect(() => {
+    if (!toastMessage) {
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      setToastMessage('');
+    }, 2600);
+
+    return () => clearTimeout(timer);
+  }, [toastMessage]);
+
+  const handleCreate = () => {
+    setDialogMode('create');
+    setEditingItem(null);
+    setDialogError('');
+    setDialogOpen(true);
+  };
+
+  const handleEdit = (item: CatalogItem) => {
+    setDialogMode('edit');
+    setEditingItem(item);
+    setDialogError('');
+    setDialogOpen(true);
+  };
+
+  const handleDialogSubmit = async (payload: CatalogItemInput) => {
+    await saveMutation.mutateAsync({
+      mode: dialogMode,
+      itemId: editingItem?.id,
+      payload,
+    });
+  };
 
   const loading = isLoading || isFetching;
   const loadErrorMessage = loadError instanceof Error ? loadError.message : '';
 
   return (
     <div className="flex flex-col gap-6">
-      <Card className="border-border/70 bg-card/95 shadow-sm">
-        <CardHeader>
-          <CardTitle>{form.id ? 'Editar item' : 'Novo item'}</CardTitle>
-        </CardHeader>
-        <CardContent className="grid gap-3 md:grid-cols-4">
-          <Input
-            placeholder="Codigo"
-            value={form.code}
-            onChange={(e) =>
-              setForm((prev) => ({ ...prev, code: e.target.value }))
-            }
-          />
-          <Input
-            placeholder="Descricao"
-            value={form.name}
-            onChange={(e) =>
-              setForm((prev) => ({ ...prev, name: e.target.value }))
-            }
-          />
-          <Select
-            value={form.type}
-            onValueChange={(value) =>
-              setForm((prev) => ({ ...prev, type: value as CatalogItemType }))
+      {toastMessage ? (
+        <div className="pointer-events-none fixed right-4 top-4 z-50">
+          <div
+            className={
+              toastVariant === 'success'
+                ? 'rounded-md border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm text-emerald-800 shadow-md'
+                : 'rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive shadow-md'
             }
           >
-            <SelectTrigger className="w-full">
-              <SelectValue>
-                {formatSelectValue(selectLabelMaps.catalogType, 'Tipo')}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectGroup>
-                <SelectItem value="product">Produto</SelectItem>
-                <SelectItem value="service">Servico</SelectItem>
-              </SelectGroup>
-            </SelectContent>
-          </Select>
-          <Select
-            value={form.unit}
-            onValueChange={(value) =>
-              setForm((prev) => ({ ...prev, unit: value as FormState['unit'] }))
-            }
-          >
-            <SelectTrigger className="w-full">
-              <SelectValue>
-                {formatSelectValue(selectLabelMaps.measurementUnit, 'Unidade')}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectGroup>
-                {MEASUREMENT_UNITS.map((unit) => (
-                  <SelectItem key={unit} value={unit}>
-                    {unit}
-                  </SelectItem>
-                ))}
-              </SelectGroup>
-            </SelectContent>
-          </Select>
-          <Input
-            type="number"
-            min="0"
-            step="0.01"
-            placeholder="Preco padrao"
-            value={form.defaultUnitPrice}
-            onChange={(e) =>
-              setForm((prev) => ({
-                ...prev,
-                defaultUnitPrice: Number(e.target.value || 0),
-              }))
-            }
-          />
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Checkbox
-              id="allowCustomDescription"
-              checked={form.allowCustomDescription}
-              onCheckedChange={(checked) =>
-                setForm((prev) => ({
-                  ...prev,
-                  allowCustomDescription: checked === true,
-                }))
-              }
-            />
-            <Label htmlFor="allowCustomDescription">Permite descricao livre</Label>
+            {toastMessage}
           </div>
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Checkbox
-              id="catalogItemActive"
-              checked={form.active}
-              onCheckedChange={(checked) =>
-                setForm((prev) => ({ ...prev, active: checked === true }))
-              }
-            />
-            <Label htmlFor="catalogItemActive">Ativo</Label>
-          </div>
+        </div>
+      ) : null}
 
-          <div className="md:col-span-4 flex flex-wrap gap-2">
-            <Button type="button" onClick={() => saveMutation.mutate(form)} disabled={actionLoading}>
-              {actionLoading
-                ? form.id
-                  ? 'Atualizando...'
-                  : 'Cadastrando...'
-                : form.id
-                  ? 'Atualizar'
-                  : 'Cadastrar'}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setForm(emptyForm)}
-              disabled={actionLoading}
-            >
-              Limpar
-            </Button>
-          </div>
-          {error ? (
-            <p className="md:col-span-4 text-sm text-destructive">{error}</p>
-          ) : null}
-        </CardContent>
-      </Card>
+      <UpsertCatalogItemDialog
+        open={dialogOpen}
+        mode={dialogMode}
+        initialItem={editingItem}
+        loading={saveMutation.isPending}
+        error={dialogError}
+        onOpenChange={(open) => {
+          setDialogOpen(open);
+          if (!open) {
+            setEditingItem(null);
+            setDialogError('');
+          }
+        }}
+        onSubmit={handleDialogSubmit}
+      />
 
       <Card className="border-border/70 bg-card/95 shadow-sm">
         <CardHeader>
           <div className="flex flex-wrap items-center justify-between gap-2">
             <CardTitle>Itens do catalogo</CardTitle>
-            <Button type="button" size="sm" variant="outline" onClick={() => void refetch()}>
-              Atualizar agora
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button type="button" size="sm" variant="outline" onClick={() => void refetch()}>
+                Atualizar agora
+              </Button>
+              <Button type="button" size="sm" onClick={handleCreate}>
+                <Plus data-icon="inline-start" />
+                Novo item
+              </Button>
+            </div>
           </div>
-          <p className="text-xs text-muted-foreground">
-            Atualizado em {dataUpdatedAt ? formatDateTime(dataUpdatedAt) : '--'} · fetches: {metric?.fetches ?? 0} · cache hits: {metric?.cacheHits ?? 0}
+          <p className="text-xs text-muted-foreground" suppressHydrationWarning>
+            Atualizado em {dataUpdatedAt ? formatDateTime(dataUpdatedAt) : '--'} ·
+            fetches: {metric?.fetches ?? 0} · cache hits: {metric?.cacheHits ?? 0}
           </p>
         </CardHeader>
         <CardContent className="flex flex-col gap-3 overflow-x-auto">
@@ -398,9 +368,7 @@ export function CatalogManager() {
             />
             <Select
               value={type}
-              onValueChange={(value) =>
-                setType(value as CatalogItemType | 'all')
-              }
+              onValueChange={(value) => setType(value as CatalogItemType | 'all')}
             >
               <SelectTrigger className="w-full">
                 <SelectValue>
@@ -429,6 +397,7 @@ export function CatalogManager() {
           </div>
 
           {loadErrorMessage ? <p className="text-sm text-destructive">{loadErrorMessage}</p> : null}
+          {toggleError ? <p className="text-sm text-destructive">{toggleError}</p> : null}
 
           <Table>
             <TableHeader>
@@ -447,68 +416,71 @@ export function CatalogManager() {
               {loading
                 ? Array.from({ length: 5 }).map((_, index) => (
                     <TableRow key={`skeleton-${index}`}>
-                      <TableCell><Skeleton className="h-4 w-16" /></TableCell>
-                      <TableCell><Skeleton className="h-4 w-40" /></TableCell>
-                      <TableCell><Skeleton className="h-4 w-16" /></TableCell>
-                      <TableCell><Skeleton className="h-4 w-10" /></TableCell>
-                      <TableCell><Skeleton className="h-4 w-20" /></TableCell>
-                      <TableCell><Skeleton className="h-4 w-8" /></TableCell>
-                      <TableCell><Skeleton className="h-4 w-14" /></TableCell>
-                      <TableCell className="text-right"><Skeleton className="ml-auto h-8 w-28" /></TableCell>
+                      <TableCell>
+                        <Skeleton className="h-4 w-16" />
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-4 w-40" />
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-4 w-16" />
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-4 w-10" />
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-4 w-20" />
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-4 w-8" />
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-4 w-14" />
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Skeleton className="ml-auto h-8 w-28" />
+                      </TableCell>
                     </TableRow>
                   ))
                 : null}
               {!loading
                 ? items.map((item) => (
-                <TableRow key={item.id}>
-                  <TableCell>{item.code}</TableCell>
-                  <TableCell>{item.name}</TableCell>
-                  <TableCell>
-                    {item.type === 'product' ? 'Produto' : 'Servico'}
-                  </TableCell>
-                  <TableCell>{item.unit}</TableCell>
-                  <TableCell>{item.defaultUnitPrice.toFixed(2)}</TableCell>
-                  <TableCell>
-                    {item.allowCustomDescription ? 'Sim' : 'Nao'}
-                  </TableCell>
-                  <TableCell>{item.active ? 'Ativo' : 'Inativo'}</TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end gap-2">
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        disabled={loading}
-                        onClick={() =>
-                          setForm({
-                            id: item.id,
-                            code: item.code,
-                            name: item.name,
-                            type: item.type,
-                            unit: item.unit,
-                            defaultUnitPrice: item.defaultUnitPrice,
-                            allowCustomDescription: item.allowCustomDescription,
-                            active: item.active,
-                          })
-                        }
-                      >
-                        Editar
-                      </Button>
-                      {item.code !== '000' ? (
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="ghost"
-                          disabled={loading}
-                          onClick={() => toggleMutation.mutate({ id: item.id, active: !item.active })}
-                        >
-                          {item.active ? 'Inativar' : 'Ativar'}
-                        </Button>
-                      ) : null}
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))
+                    <TableRow key={item.id}>
+                      <TableCell>{item.code}</TableCell>
+                      <TableCell>{item.name}</TableCell>
+                      <TableCell>{item.type === 'product' ? 'Produto' : 'Servico'}</TableCell>
+                      <TableCell>{item.unit}</TableCell>
+                      <TableCell>{item.defaultUnitPrice.toFixed(2)}</TableCell>
+                      <TableCell>{item.allowCustomDescription ? 'Sim' : 'Nao'}</TableCell>
+                      <TableCell>{item.active ? 'Ativo' : 'Inativo'}</TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-2">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            disabled={loading || saveMutation.isPending}
+                            onClick={() => handleEdit(item)}
+                          >
+                            Editar
+                          </Button>
+                          {item.code !== '000' ? (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              disabled={loading || toggleMutation.isPending}
+                              onClick={() =>
+                                toggleMutation.mutate({ id: item.id, active: !item.active })
+                              }
+                            >
+                              {item.active ? 'Inativar' : 'Ativar'}
+                            </Button>
+                          ) : null}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
                 : null}
             </TableBody>
           </Table>

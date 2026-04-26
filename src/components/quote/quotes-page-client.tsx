@@ -84,7 +84,7 @@ export function QuotesPageClient() {
             Atualizar agora
           </Button>
         </div>
-        <p className="text-xs text-muted-foreground">
+        <p className="text-xs text-muted-foreground" suppressHydrationWarning>
           Atualizado em {dataUpdatedAt ? formatDateTime(dataUpdatedAt) : '--'} ·
           fetches: {metric?.fetches ?? 0} · cache hits: {metric?.cacheHits ?? 0}
         </p>

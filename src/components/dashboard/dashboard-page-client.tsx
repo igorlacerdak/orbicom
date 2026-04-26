@@ -92,7 +92,7 @@ export function DashboardPageClient() {
   return (
     <>
       <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-        <span>
+        <span suppressHydrationWarning>
           Atualizado em {dataUpdatedAt ? formatDateTime(dataUpdatedAt) : "--"} · fetches: {metric?.fetches ?? 0} · cache hits: {metric?.cacheHits ?? 0}
         </span>
         <Button type="button" size="sm" variant="outline" onClick={() => void refetch()}>

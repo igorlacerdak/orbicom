@@ -8,8 +8,8 @@ export const catalogItemSchema = z.object({
   type: z.enum(["product", "service"]),
   unit: z.enum(MEASUREMENT_UNITS),
   defaultUnitPrice: z.number().min(0, "O preco nao pode ser negativo"),
-  allowCustomDescription: z.boolean().default(false),
-  active: z.boolean().default(true),
+  allowCustomDescription: z.boolean(),
+  active: z.boolean(),
 });
 
 export type CatalogItemInput = z.infer<typeof catalogItemSchema>;
