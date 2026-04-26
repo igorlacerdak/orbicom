@@ -1,10 +1,12 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { InlineError, InlineInfo } from "@/components/ui/inline-feedback";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -52,7 +54,6 @@ export function AccessControlPanel() {
   const [isSubmittingInvite, setIsSubmittingInvite] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
   const [expiresInDays, setExpiresInDays] = useState(7);
-  const [feedback, setFeedback] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isUpdatingMemberId, setIsUpdatingMemberId] = useState<string | null>(null);
 
@@ -125,12 +126,12 @@ export function AccessControlPanel() {
     event.preventDefault();
     if (!inviteEmail.trim()) {
       setError("Informe um email para convite.");
+      toast.error("Informe um email para convite.");
       return;
     }
 
     setIsSubmittingInvite(true);
     setError(null);
-    setFeedback(null);
 
     try {
       const response = await fetch("/api/workspaces/invites", {
@@ -146,11 +147,13 @@ export function AccessControlPanel() {
         throw new Error(payload.error ?? "Falha ao criar convite.");
       }
 
-      setFeedback(`Convite criado para ${payload.data.email}.`);
+      toast.success(`Convite criado para ${payload.data.email}.`);
       setInviteEmail("");
       await loadData({ withLoadingState: false });
     } catch (createError) {
-      setError(createError instanceof Error ? createError.message : "Falha ao criar convite.");
+      const message = createError instanceof Error ? createError.message : "Falha ao criar convite.";
+      setError(message);
+      toast.error(message);
     } finally {
       setIsSubmittingInvite(false);
     }
@@ -159,7 +162,6 @@ export function AccessControlPanel() {
   const handleMemberStatusChange = async (memberId: string, status: "active" | "disabled") => {
     setIsUpdatingMemberId(memberId);
     setError(null);
-    setFeedback(null);
 
     try {
       const response = await fetch(`/api/workspaces/members/${memberId}/status`, {
@@ -175,12 +177,14 @@ export function AccessControlPanel() {
         throw new Error(payload.error ?? "Falha ao atualizar colaborador.");
       }
 
-      setFeedback(
+      toast.success(
         status === "disabled" ? "Colaborador desativado com sucesso." : "Colaborador reativado com sucesso.",
       );
       await loadData({ withLoadingState: false });
     } catch (updateError) {
-      setError(updateError instanceof Error ? updateError.message : "Falha ao atualizar colaborador.");
+      const message = updateError instanceof Error ? updateError.message : "Falha ao atualizar colaborador.";
+      setError(message);
+      toast.error(message);
     } finally {
       setIsUpdatingMemberId(null);
     }
@@ -206,9 +210,9 @@ export function AccessControlPanel() {
         </CardHeader>
         <CardContent>
           {!data?.canManage ? (
-            <p className="rounded-lg border border-dashed border-border px-4 py-3 text-sm text-muted-foreground">
-              Apenas Dono/Administrador podem criar convites ou desativar colaboradores.
-            </p>
+            <InlineInfo
+              message="Apenas Dono/Administrador podem criar convites ou desativar colaboradores."
+            />
           ) : (
             <form onSubmit={handleCreateInvite} className="grid gap-3 md:grid-cols-[1fr_160px_auto]">
               <Input
@@ -230,8 +234,7 @@ export function AccessControlPanel() {
               </Button>
             </form>
           )}
-          {feedback ? <p className="mt-3 break-all text-sm text-emerald-600">{feedback}</p> : null}
-          {error ? <p className="mt-3 text-sm text-destructive">{error}</p> : null}
+          {error ? <InlineError message={error} className="mt-3" compact /> : null}
         </CardContent>
       </Card>
 

@@ -3,6 +3,7 @@
 import { FormEvent, useState } from "react";
 import { Building2, MailPlus } from "lucide-react";
 import { useRouter } from "nextjs-toploader/app";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,18 +15,14 @@ export function WelcomeWorkspaceFlow() {
   const [inviteToken, setInviteToken] = useState("");
   const [isCreating, setIsCreating] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
-  const [feedback, setFeedback] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
   const handleCreateWorkspace = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!companyName.trim()) {
-      setError("Informe o nome da empresa para continuar.");
+      toast.error("Informe o nome da empresa para continuar.");
       return;
     }
 
-    setError(null);
-    setFeedback(null);
     setIsCreating(true);
 
     try {
@@ -45,7 +42,7 @@ export function WelcomeWorkspaceFlow() {
       router.push("/onboarding");
       router.refresh();
     } catch (createError) {
-      setError(createError instanceof Error ? createError.message : "Falha ao criar empresa/workspace.");
+      toast.error(createError instanceof Error ? createError.message : "Falha ao criar empresa/workspace.");
     } finally {
       setIsCreating(false);
     }
@@ -54,12 +51,10 @@ export function WelcomeWorkspaceFlow() {
   const handleAcceptInvite = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!inviteToken.trim()) {
-      setError("Cole o token do convite para participar de uma empresa.");
+      toast.error("Cole o token do convite para participar de uma empresa.");
       return;
     }
 
-    setError(null);
-    setFeedback(null);
     setIsJoining(true);
 
     try {
@@ -76,11 +71,11 @@ export function WelcomeWorkspaceFlow() {
         throw new Error(payload.error ?? "Falha ao aceitar convite.");
       }
 
-      setFeedback(`Convite aceito em ${payload.data.workspaceName}.`);
+      toast.success(`Convite aceito em ${payload.data.workspaceName}.`);
       router.push("/dashboard");
       router.refresh();
     } catch (joinError) {
-      setError(joinError instanceof Error ? joinError.message : "Falha ao aceitar convite.");
+      toast.error(joinError instanceof Error ? joinError.message : "Falha ao aceitar convite.");
     } finally {
       setIsJoining(false);
     }
@@ -135,9 +130,6 @@ export function WelcomeWorkspaceFlow() {
           </form>
         </CardContent>
       </Card>
-
-      {feedback ? <p className="md:col-span-2 text-sm text-emerald-600">{feedback}</p> : null}
-      {error ? <p className="md:col-span-2 text-sm text-destructive">{error}</p> : null}
     </div>
   );
 }

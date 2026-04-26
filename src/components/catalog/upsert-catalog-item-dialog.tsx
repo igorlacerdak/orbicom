@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Field, FieldContent, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { InlineError } from "@/components/ui/inline-feedback";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { catalogItemSchema, type CatalogItemInput } from "@/domain/catalog.schema";
@@ -215,7 +216,7 @@ export function UpsertCatalogItemDialog({
             </Field>
           </FieldGroup>
 
-          {error ? <p className="text-sm text-destructive">{error}</p> : null}
+          {error ? <InlineError message={error} compact /> : null}
 
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>

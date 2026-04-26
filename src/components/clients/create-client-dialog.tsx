@@ -8,6 +8,7 @@ import { clientSchema, type ClientInput } from "@/domain/client.schema";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Field, FieldContent, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { InlineError } from "@/components/ui/inline-feedback";
 import { Input } from "@/components/ui/input";
 import { formatCep, formatCpfCnpj, formatPhoneBr, formatStateCode } from "@/lib/masks";
 
@@ -138,7 +139,7 @@ export function CreateClientDialog({ open, onOpenChange, onCreate, loading, erro
             </Field>
           </FieldGroup>
 
-          {error ? <p className="text-sm text-destructive">{error}</p> : null}
+          {error ? <InlineError message={error} compact /> : null}
 
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>

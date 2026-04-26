@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { InlineInfo, InlineSuccess } from "@/components/ui/inline-feedback";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatDateTime } from "@/lib/formatters";
 import { getQueryMetricsSnapshot } from "@/lib/query-metrics";
@@ -15,6 +16,7 @@ const STORAGE_KEY = "orbicom_query_metrics";
 export function CacheMetricsPanel() {
   const [snapshot, setSnapshot] = useState<MetricsSnapshot>({});
   const [updatedAt, setUpdatedAt] = useState<number>(0);
+  const [hasJustCleared, setHasJustCleared] = useState(false);
 
   useEffect(() => {
     const sync = () => {
@@ -61,7 +63,17 @@ export function CacheMetricsPanel() {
     }
     setSnapshot({});
     setUpdatedAt(Date.now());
+    setHasJustCleared(true);
   };
+
+  useEffect(() => {
+    if (!hasJustCleared) {
+      return;
+    }
+
+    const timer = setTimeout(() => setHasJustCleared(false), 2200);
+    return () => clearTimeout(timer);
+  }, [hasJustCleared]);
 
   return (
     <div className="grid gap-6">
@@ -80,6 +92,11 @@ export function CacheMetricsPanel() {
           </div>
         </CardHeader>
         <CardContent className="grid gap-3 text-sm">
+          <InlineInfo
+            message="As metricas sao mantidas apenas na sessao atual do navegador."
+            compact
+          />
+          {hasJustCleared ? <InlineSuccess message="Metricas limpas com sucesso." compact /> : null}
           <p className="text-muted-foreground">Ultima leitura: {formatDateTime(updatedAt)}</p>
           <div className="flex flex-wrap gap-4">
             <span>Fetches: {totals.fetches}</span>

@@ -7,6 +7,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { InlineError } from "@/components/ui/inline-feedback";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatCurrency, formatDate, formatDateTime } from "@/lib/formatters";
@@ -75,9 +76,10 @@ export function OrdersPageClient() {
       </CardHeader>
       <CardContent className="overflow-x-auto">
         {error ? (
-          <p className="mb-4 rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
-            {error instanceof Error ? error.message : "Falha ao listar pedidos."}
-          </p>
+          <InlineError
+            message={error instanceof Error ? error.message : "Falha ao listar pedidos."}
+            className="mb-4"
+          />
         ) : null}
 
         {isLoading ? (

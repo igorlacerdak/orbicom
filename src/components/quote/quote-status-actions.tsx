@@ -4,6 +4,7 @@ import { useRouter } from "nextjs-toploader/app";
 import { useState } from "react";
 import { CheckCircle2, CircleSlash2, Copy, Eye, History, MoreHorizontal, Send } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -35,12 +36,10 @@ export function QuoteStatusActions({ quoteId, status }: QuoteStatusActionsProps)
   const router = useRouter();
   const queryClient = useQueryClient();
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
   const [currentStatus, setCurrentStatus] = useState<QuoteStatus>(status);
 
   const onChangeStatus = async (nextStatus: QuoteStatus) => {
     setLoading(true);
-    setError("");
 
     const response = await fetch(`/api/quotes/${quoteId}/status`, {
       method: "PATCH",
@@ -50,7 +49,7 @@ export function QuoteStatusActions({ quoteId, status }: QuoteStatusActionsProps)
     const body = (await response.json()) as { data?: { status?: QuoteStatus }; error?: string };
 
     if (!response.ok) {
-      setError(body.error ?? "Falha ao atualizar status.");
+      toast.error(body.error ?? "Falha ao atualizar status.");
     } else {
       const updatedStatus = body.data?.status ?? nextStatus;
       setCurrentStatus(updatedStatus);
@@ -65,6 +64,7 @@ export function QuoteStatusActions({ quoteId, status }: QuoteStatusActionsProps)
         });
       });
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard() });
+      toast.success("Status atualizado com sucesso.");
     }
 
     setLoading(false);
@@ -72,7 +72,6 @@ export function QuoteStatusActions({ quoteId, status }: QuoteStatusActionsProps)
 
   const onConvert = async () => {
     setLoading(true);
-    setError("");
 
     const response = await fetch(`/api/quotes/${quoteId}/convert`, {
       method: "POST",
@@ -80,7 +79,7 @@ export function QuoteStatusActions({ quoteId, status }: QuoteStatusActionsProps)
     const body = (await response.json()) as { data?: { orderId?: string }; error?: string };
 
     if (!response.ok) {
-      setError(body.error ?? "Falha ao converter em pedido.");
+      toast.error(body.error ?? "Falha ao converter em pedido.");
       setLoading(false);
       return;
     }
@@ -98,6 +97,7 @@ export function QuoteStatusActions({ quoteId, status }: QuoteStatusActionsProps)
     });
     queryClient.invalidateQueries({ queryKey: queryKeys.orders() });
     queryClient.invalidateQueries({ queryKey: queryKeys.dashboard() });
+    toast.success("Orcamento convertido em pedido.");
     if (body.data?.orderId) {
       router.push(`/pedidos/${body.data.orderId}`);
     }
@@ -105,7 +105,6 @@ export function QuoteStatusActions({ quoteId, status }: QuoteStatusActionsProps)
 
   const onDuplicate = async () => {
     setLoading(true);
-    setError("");
 
     const response = await fetch(`/api/quotes/${quoteId}/duplicate`, {
       method: "POST",
@@ -113,7 +112,7 @@ export function QuoteStatusActions({ quoteId, status }: QuoteStatusActionsProps)
     const body = (await response.json()) as { data?: { id: string }; error?: string };
 
     if (!response.ok || !body.data?.id) {
-      setError(body.error ?? "Falha ao duplicar orcamento.");
+      toast.error(body.error ?? "Falha ao duplicar orcamento.");
       setLoading(false);
       return;
     }
@@ -121,6 +120,7 @@ export function QuoteStatusActions({ quoteId, status }: QuoteStatusActionsProps)
     setLoading(false);
     queryClient.invalidateQueries({ queryKey: queryKeys.quotes() });
     queryClient.invalidateQueries({ queryKey: queryKeys.dashboard() });
+    toast.success("Orcamento duplicado com sucesso.");
     router.push(`/orcamentos/${body.data.id}`);
   };
 
@@ -194,8 +194,6 @@ export function QuoteStatusActions({ quoteId, status }: QuoteStatusActionsProps)
           ) : null}
         </DropdownMenuContent>
       </DropdownMenu>
-
-      {error ? <p className="text-xs text-destructive">{error}</p> : null}
     </div>
   );
 }

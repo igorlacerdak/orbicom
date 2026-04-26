@@ -7,6 +7,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { Save, FileDown, ArrowLeft } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useFieldArray, useForm, useWatch } from 'react-hook-form';
+import { toast } from 'sonner';
 
 import { calculateQuoteTotals } from '@/domain/quote.calculations';
 import { buildDraftQuote } from '@/domain/quote.defaults';
@@ -60,7 +61,6 @@ const buildQuotePayload = (values: QuoteFormInput): QuoteFormInput => ({
 export const QuoteForm = ({ initialQuote, mode, initialCatalogItems = [] }: QuoteFormProps) => {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const [notice, setNotice] = useState('');
   const [pdfLoading, setPdfLoading] = useState(false);
   const [catalogItems] = useState<CatalogItem[]>(initialCatalogItems);
 
@@ -184,13 +184,13 @@ export const QuoteForm = ({ initialQuote, mode, initialCatalogItems = [] }: Quot
         return [savedQuote, ...withoutCurrent];
       });
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard() });
-      setNotice('Orbicom: orcamento salvo com sucesso.');
+      toast.success('Orcamento salvo com sucesso.');
 
       if (mode === 'create') {
         router.push(`/orcamentos/${savedQuote.id}`);
       }
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : 'Falha ao salvar orcamento.');
+      toast.error(error instanceof Error ? error.message : 'Falha ao salvar orcamento.');
     }
   };
 
@@ -199,9 +199,9 @@ export const QuoteForm = ({ initialQuote, mode, initialCatalogItems = [] }: Quot
     try {
       const savedQuote = await persistQuote(values);
       window.open(`/api/quotes/${savedQuote.id}/pdf`, '_blank', 'noopener,noreferrer');
-      setNotice('PDF gerado com sucesso.');
+      toast.success('PDF gerado com sucesso.');
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : 'Falha ao gerar PDF.');
+      toast.error(error instanceof Error ? error.message : 'Falha ao gerar PDF.');
     } finally {
       setPdfLoading(false);
     }
@@ -212,7 +212,7 @@ export const QuoteForm = ({ initialQuote, mode, initialCatalogItems = [] }: Quot
       shouldDirty: true,
       shouldTouch: true,
     });
-    setNotice('Observacoes padrao aplicadas com base no total atual.');
+    toast.info('Observacoes padrao aplicadas com base no total atual.');
   };
 
   return (
@@ -261,13 +261,6 @@ export const QuoteForm = ({ initialQuote, mode, initialCatalogItems = [] }: Quot
           </Button>
         </div>
       </div>
-
-      {notice ? (
-        <Card className="border-emerald-300 bg-emerald-50 text-emerald-900">
-          <CardContent className="py-3 text-sm">{notice}</CardContent>
-        </Card>
-      ) : null}
-
       <LogoUpload
         logoDataUrl={watchedData.company?.logoDataUrl}
         setValue={setValue}

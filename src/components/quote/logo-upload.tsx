@@ -4,6 +4,7 @@ import Image from "next/image";
 import { ChangeEvent } from "react";
 import { ImagePlus, Trash2 } from "lucide-react";
 import { UseFormRegister, UseFormSetValue } from "react-hook-form";
+import { toast } from "sonner";
 
 import { QuoteFormInput } from "@/domain/quote.schema";
 import { Button } from "@/components/ui/button";
@@ -26,7 +27,7 @@ export const LogoUpload = ({ logoDataUrl, setValue, register }: LogoUploadProps)
 
     const maxSize = MAX_FILE_SIZE_MB * 1024 * 1024;
     if (file.size > maxSize) {
-      alert("Use uma imagem de ate 2MB para o logo.");
+      toast.error("Use uma imagem de ate 2MB para o logo.");
       return;
     }
 

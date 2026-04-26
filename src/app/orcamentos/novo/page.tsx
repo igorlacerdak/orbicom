@@ -1,5 +1,6 @@
 import { QuoteForm } from "@/components/quote/quote-form";
 import { AppShell } from "@/components/layout/app-shell";
+import { InlineError } from "@/components/ui/inline-feedback";
 import { buildDraftQuote } from "@/domain/quote.defaults";
 import { catalogService } from "@/server/catalog-service";
 import { quoteService } from "@/server/quote-service";
@@ -27,9 +28,10 @@ export default async function NewQuotePage() {
           </p>
         </header>
         {loadError ? (
-          <p className="mx-auto mt-4 w-full max-w-7xl rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive md:px-8">
-            {loadError}
-          </p>
+          <InlineError
+            message={loadError}
+            className="mx-auto mt-4 w-full max-w-7xl px-4 py-3 md:px-8"
+          />
         ) : null}
         <QuoteForm key={draft.quoteNumber} mode="create" initialQuote={draft} initialCatalogItems={catalogItems} />
       </main>

@@ -4,9 +4,11 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Plus, Search } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { InlineError } from "@/components/ui/inline-feedback";
 import { Input } from "@/components/ui/input";
 import { PageHero } from "@/components/layout/page-hero";
 import { CreateClientDialog } from "@/components/clients/create-client-dialog";
@@ -135,9 +137,12 @@ export function ClientsList() {
       }
 
       setCreateError("");
+      toast.success("Cliente cadastrado com sucesso.");
     },
     onError: (mutationError) => {
-      setCreateError(mutationError instanceof Error ? mutationError.message : "Falha ao cadastrar cliente.");
+      const message = mutationError instanceof Error ? mutationError.message : "Falha ao cadastrar cliente.";
+      setCreateError(message);
+      toast.error(message);
     },
   });
 
@@ -199,9 +204,7 @@ export function ClientsList() {
         </CardHeader>
         <CardContent className="overflow-x-auto">
           {errorMessage ? (
-            <p className="mb-4 rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
-              {errorMessage}
-            </p>
+            <InlineError message={errorMessage} className="mb-4" />
           ) : null}
 
           <Table>

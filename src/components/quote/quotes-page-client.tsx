@@ -7,6 +7,7 @@ import { QuoteStatusActions } from '@/components/quote/quote-status-actions';
 import { QuoteStatusBadge } from '@/components/quote/quote-status-badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { InlineError } from '@/components/ui/inline-feedback';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   Table,
@@ -90,13 +91,12 @@ export function QuotesPageClient() {
         </p>
       </CardHeader>
       <CardContent className="overflow-x-auto">
-        {error ? (
-          <p className="mb-4 rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
-            {error instanceof Error
-              ? error.message
-              : 'Falha ao carregar orcamentos.'}
-          </p>
-        ) : null}
+          {error ? (
+            <InlineError
+              message={error instanceof Error ? error.message : 'Falha ao carregar orcamentos.'}
+              className="mb-4"
+            />
+          ) : null}
 
         {isLoading ? (
           <div className="grid gap-2">

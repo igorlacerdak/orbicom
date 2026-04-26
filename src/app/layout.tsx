@@ -5,6 +5,7 @@ import { IBM_Plex_Mono, Manrope } from "next/font/google";
 import { AppTopLoader } from "@/components/layout/app-top-loader";
 import { QueryProvider } from "@/components/providers/query-provider";
 import { ThemeProvider } from "@/components/theme/theme-provider";
+import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
 import "./globals.css";
@@ -44,6 +45,7 @@ export default function RootLayout({
               {/* Header global desativado: usamos apenas o header do AppShell */}
               {/* <AppHeader isAuthenticated={false} /> */}
               {children}
+              <Toaster position="top-right" />
             </TooltipProvider>
           </QueryProvider>
         </ThemeProvider>

@@ -3,11 +3,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Plus } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 
 import { UpsertCatalogItemDialog } from '@/components/catalog/upsert-catalog-item-dialog';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
+import { InlineError } from '@/components/ui/inline-feedback';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -126,8 +128,6 @@ export function CatalogManager() {
   const [editingItem, setEditingItem] = useState<CatalogItem | null>(null);
   const [dialogError, setDialogError] = useState('');
   const [toggleError, setToggleError] = useState('');
-  const [toastMessage, setToastMessage] = useState('');
-  const [toastVariant, setToastVariant] = useState<'success' | 'error'>('success');
 
   const filters = useMemo(() => ({ q, type, showInactive }), [q, showInactive, type]);
 
@@ -222,16 +222,14 @@ export function CatalogManager() {
       applyItemToCatalogCache(savedItem);
       setDialogOpen(false);
       setEditingItem(null);
-      setToastVariant('success');
-      setToastMessage(dialogMode === 'edit' ? 'Item atualizado com sucesso.' : 'Item cadastrado com sucesso.');
+      toast.success(dialogMode === 'edit' ? 'Item atualizado com sucesso.' : 'Item cadastrado com sucesso.');
     },
     onError: (mutationError) => {
       const message = mutationError instanceof Error
         ? mutationError.message
         : 'Falha ao salvar item do catalogo.';
       setDialogError(message);
-      setToastVariant('error');
-      setToastMessage(message);
+      toast.error(message);
     },
   });
 
@@ -258,30 +256,16 @@ export function CatalogManager() {
     },
     onSuccess: (updatedItem) => {
       applyItemToCatalogCache(updatedItem);
-      setToastVariant('success');
-      setToastMessage(updatedItem.active ? 'Item ativado com sucesso.' : 'Item inativado com sucesso.');
+      toast.success(updatedItem.active ? 'Item ativado com sucesso.' : 'Item inativado com sucesso.');
     },
     onError: (mutationError) => {
       const message = mutationError instanceof Error
         ? mutationError.message
         : 'Falha ao atualizar status do item.';
       setToggleError(message);
-      setToastVariant('error');
-      setToastMessage(message);
+      toast.error(message);
     },
   });
-
-  useEffect(() => {
-    if (!toastMessage) {
-      return;
-    }
-
-    const timer = setTimeout(() => {
-      setToastMessage('');
-    }, 2600);
-
-    return () => clearTimeout(timer);
-  }, [toastMessage]);
 
   const handleCreate = () => {
     setDialogMode('create');
@@ -310,20 +294,6 @@ export function CatalogManager() {
 
   return (
     <div className="flex flex-col gap-6">
-      {toastMessage ? (
-        <div className="pointer-events-none fixed right-4 top-4 z-50">
-          <div
-            className={
-              toastVariant === 'success'
-                ? 'rounded-md border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm text-emerald-800 shadow-md'
-                : 'rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive shadow-md'
-            }
-          >
-            {toastMessage}
-          </div>
-        </div>
-      ) : null}
-
       <UpsertCatalogItemDialog
         open={dialogOpen}
         mode={dialogMode}
@@ -396,8 +366,8 @@ export function CatalogManager() {
             </Button>
           </div>
 
-          {loadErrorMessage ? <p className="text-sm text-destructive">{loadErrorMessage}</p> : null}
-          {toggleError ? <p className="text-sm text-destructive">{toggleError}</p> : null}
+          {loadErrorMessage ? <InlineError message={loadErrorMessage} compact /> : null}
+          {toggleError ? <InlineError message={toggleError} compact /> : null}
 
           <Table>
             <TableHeader>
