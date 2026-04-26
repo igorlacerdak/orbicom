@@ -2,17 +2,19 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Search } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
+import { Plus, Search } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { PageHero } from "@/components/layout/page-hero";
+import { CreateClientDialog } from "@/components/clients/create-client-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatDate } from "@/lib/formatters";
 import { formatDateTime } from "@/lib/formatters";
+import type { ClientInput } from "@/domain/client.schema";
 import { getQueryMetricsSnapshot, recordQueryCacheHit, recordQueryFetch } from "@/lib/query-metrics";
 import { queryKeys } from "@/lib/query-keys";
 import type { ClientSummary } from "@/server/client-service";
@@ -37,9 +39,12 @@ const fetchClients = async (search: string): Promise<ClientSummary[]> => {
 };
 
 export function ClientsList() {
+  const queryClient = useQueryClient();
   const hasTrackedCacheHit = useRef(false);
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [createError, setCreateError] = useState("");
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -73,6 +78,73 @@ export function ClientsList() {
   );
   const metric = getQueryMetricsSnapshot()[METRIC_KEY];
 
+  const clientMatchesSearch = (client: ClientSummary, search: string) => {
+    const normalized = search.trim().toLowerCase();
+    if (!normalized) {
+      return true;
+    }
+
+    return (
+      client.name.toLowerCase().includes(normalized) ||
+      client.document.toLowerCase().includes(normalized) ||
+      client.city.toLowerCase().includes(normalized)
+    );
+  };
+
+  const createMutation = useMutation({
+    mutationFn: async (payload: ClientInput) => {
+      const response = await fetch("/api/clients", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const body = (await response.json()) as { data?: ClientSummary; error?: string };
+      if (!response.ok || !body.data) {
+        throw new Error(body.error ?? "Falha ao cadastrar cliente.");
+      }
+
+      return body.data;
+    },
+    onMutate: () => {
+      setCreateError("");
+    },
+    onSuccess: (createdClient) => {
+      const cachedEntries = queryClient.getQueriesData<ClientSummary[]>({ queryKey: ["clients"] });
+
+      for (const [queryKey, cachedList] of cachedEntries) {
+        const [, search = ""] = queryKey as [string, string];
+        const currentList = cachedList ?? [];
+        const filtered = currentList.filter((client) => client.id !== createdClient.id);
+
+        if (!clientMatchesSearch(createdClient, search)) {
+          queryClient.setQueryData(queryKey, filtered);
+          continue;
+        }
+
+        queryClient.setQueryData(
+          queryKey,
+          [createdClient, ...filtered].sort((a, b) => a.name.localeCompare(b.name)),
+        );
+      }
+
+      if (cachedEntries.length === 0) {
+        queryClient.setQueryData(queryKeys.clients(""), [createdClient]);
+      }
+
+      setCreateError("");
+    },
+    onError: (mutationError) => {
+      setCreateError(mutationError instanceof Error ? mutationError.message : "Falha ao cadastrar cliente.");
+    },
+  });
+
+  const handleCreateClient = async (input: ClientInput) => {
+    await createMutation.mutateAsync(input);
+  };
+
   return (
     <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 px-4 pb-10 pt-8 md:px-8">
       <PageHero
@@ -80,18 +152,37 @@ export function ClientsList() {
         description="Consulte sua base de clientes e encontre registros rapidamente por nome, documento ou cidade."
         descriptionClassName="max-w-2xl text-sm text-muted-foreground"
         actions={
-          <div className="flex w-full max-w-md items-center gap-2">
-            <Input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Buscar por nome, documento ou cidade"
-            />
-            <Button type="button" variant="outline" onClick={() => void refetch()}>
-              <Search data-icon="inline-start" />
-              Buscar
+          <div className="flex w-full max-w-3xl flex-col gap-2 md:flex-row md:items-center md:justify-end">
+            <div className="flex w-full max-w-md items-center gap-2">
+              <Input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Buscar por nome, documento ou cidade"
+              />
+              <Button type="button" variant="outline" onClick={() => void refetch()}>
+                <Search data-icon="inline-start" />
+                Buscar
+              </Button>
+            </div>
+            <Button type="button" onClick={() => setIsCreateOpen(true)}>
+              <Plus data-icon="inline-start" />
+              Novo cliente
             </Button>
           </div>
         }
+      />
+
+      <CreateClientDialog
+        open={isCreateOpen}
+        onOpenChange={(open) => {
+          setIsCreateOpen(open);
+          if (!open) {
+            setCreateError("");
+          }
+        }}
+        onCreate={handleCreateClient}
+        loading={createMutation.isPending}
+        error={createError}
       />
 
       <Card className="border-border/70 bg-card/95 shadow-sm">

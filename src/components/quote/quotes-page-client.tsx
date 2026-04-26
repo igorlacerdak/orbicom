@@ -1,12 +1,9 @@
 'use client';
 
-import Link from 'next/link';
 import { useEffect, useRef } from 'react';
-import { Plus } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 
 import { QuoteStatusActions } from '@/components/quote/quote-status-actions';
-import { PageHero } from '@/components/layout/page-hero';
 import { QuoteStatusBadge } from '@/components/quote/quote-status-badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
