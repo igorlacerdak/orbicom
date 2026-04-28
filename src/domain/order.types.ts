@@ -1,6 +1,13 @@
 import { MeasurementUnit, PartyData, QuoteTotals } from "@/domain/quote.types";
 
-export type OrderStatus = "open" | "processing" | "completed" | "cancelled";
+export type OrderStatus =
+  | "awaiting_billing"
+  | "billed"
+  | "partially_paid"
+  | "paid"
+  | "cancelled";
+
+export type OrderPaymentMethod = "a_vista" | "boleto" | "pix" | "cartao_credito";
 
 export type OrderItem = {
   id: string;
@@ -17,6 +24,10 @@ export type Order = {
   issueDate: string;
   status: OrderStatus;
   sourceQuoteId?: string | null;
+  paymentMethod: OrderPaymentMethod;
+  receivableInstallmentsCount: number;
+  receivableFirstDueDays: number;
+  receivableIntervalDays: number;
   company: PartyData;
   client: PartyData;
   items: OrderItem[];

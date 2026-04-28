@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "nextjs-toploader/app";
-import { ChevronUp, LayoutDashboard, LogOut, Settings } from "lucide-react";
+import { ChevronUp, LayoutDashboard, LogOut, Moon, Settings, Sun } from "lucide-react";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -13,6 +13,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useTheme } from "@/components/theme/theme-provider";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { SidebarMenu, SidebarMenuButton, SidebarMenuItem } from "@/components/ui/sidebar";
 
 type NavUserProps = {
@@ -37,7 +39,13 @@ const getInitials = (name: string) => {
 
 export function NavUser({ name, email, avatarUrl }: NavUserProps) {
   const router = useRouter();
+  const isMobile = useIsMobile();
+  const { theme, setTheme } = useTheme();
   const initials = getInitials(name);
+
+  const toggleTheme = () => {
+    setTheme(theme === "dark" ? "light" : "dark");
+  };
 
   return (
     <SidebarMenu>
@@ -74,6 +82,12 @@ export function NavUser({ name, email, avatarUrl }: NavUserProps) {
                 <Settings data-icon="inline-start" />
                 Configuracoes
               </DropdownMenuItem>
+              {isMobile ? (
+                <DropdownMenuItem onClick={toggleTheme}>
+                  {theme === "dark" ? <Sun data-icon="inline-start" /> : <Moon data-icon="inline-start" />}
+                  {theme === "dark" ? "Modo claro" : "Modo escuro"}
+                </DropdownMenuItem>
+              ) : null}
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuItem variant="destructive" onClick={() => router.push("/auth/sign-out")}>

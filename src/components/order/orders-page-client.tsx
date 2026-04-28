@@ -18,16 +18,18 @@ import type { Order } from "@/domain/order.types";
 const METRIC_KEY = "orders";
 
 const orderStatusLabels = {
-  open: "Aberto",
-  processing: "Em processamento",
-  completed: "Concluido",
+  awaiting_billing: "Aguardando faturamento",
+  billed: "Faturado",
+  partially_paid: "Parcialmente pago",
+  paid: "Pago",
   cancelled: "Cancelado",
 } as const;
 
 const orderStatusVariant = {
-  open: "secondary",
-  processing: "default",
-  completed: "success",
+  awaiting_billing: "secondary",
+  billed: "default",
+  partially_paid: "outline",
+  paid: "success",
   cancelled: "destructive",
 } as const;
 

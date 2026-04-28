@@ -12,19 +12,33 @@ import {
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/components/theme/theme-provider";
 
-export const ThemeToggle = () => {
+type ThemeToggleProps = {
+  compact?: boolean;
+};
+
+export const ThemeToggle = ({ compact = false }: ThemeToggleProps) => {
   const { resolvedTheme, setTheme, theme } = useTheme();
 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
         aria-label="Alterar tema"
-        className={cn(buttonVariants({ variant: "outline", size: "sm" }), "min-w-[120px] justify-between")}
+        className={cn(
+          buttonVariants({ variant: "outline", size: compact ? "icon-sm" : "sm" }),
+          compact ? undefined : "min-w-[120px] justify-between",
+        )}
       >
-        <span className="inline-flex items-center gap-2">
-          {resolvedTheme === "dark" ? <Moon className="size-4" /> : <Sun className="size-4" />}
-          {theme === "dark" ? "Dark" : "Light"}
-        </span>
+        {compact ? (
+          <>
+            {resolvedTheme === "dark" ? <Moon className="size-4" /> : <Sun className="size-4" />}
+            <span className="sr-only">Alternar tema</span>
+          </>
+        ) : (
+          <span className="inline-flex items-center gap-2">
+            {resolvedTheme === "dark" ? <Moon className="size-4" /> : <Sun className="size-4" />}
+            {theme === "dark" ? "Dark" : "Light"}
+          </span>
+        )}
       </DropdownMenuTrigger>
 
       <DropdownMenuContent align="end" sideOffset={8} className="min-w-[120px]">

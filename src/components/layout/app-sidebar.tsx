@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Activity, BarChart3, Building2, ClipboardList, FileText, PackageSearch, Settings2, Users } from 'lucide-react';
+import { Activity, BarChart3, Building2, ClipboardList, FileText, Lock, PackageSearch, Settings2, Users, Wallet } from 'lucide-react';
 
 import { NavUser } from '@/components/layout/nav-user';
 import {
@@ -19,7 +19,7 @@ import {
   SidebarRail,
 } from '@/components/ui/sidebar';
 
-const navigation = [
+const baseNavigation = [
   {
     title: 'Visao geral',
     items: [
@@ -55,24 +55,28 @@ const navigation = [
       },
     ],
   },
-  {
-    title: 'Administracao',
-    items: [
-      {
-        title: 'Controle de acesso',
-        href: '/configuracoes/acesso',
-        icon: Settings2,
-      },
-      {
-        title: 'Cache metrics',
-        href: '/dev/cache-metrics',
-        icon: Activity,
-      },
-    ],
-  },
 ];
 
+const adminNavigation = {
+  title: 'Administracao',
+  items: [
+    {
+      title: 'Controle de acesso',
+      href: '/configuracoes/acesso',
+      icon: Settings2,
+    },
+    {
+      title: 'Cache metrics',
+      href: '/dev/cache-metrics',
+      icon: Activity,
+    },
+  ],
+};
+
+type SidebarRole = 'owner' | 'admin' | 'operator' | 'finance';
+
 type AppSidebarProps = {
+  activeRoles: SidebarRole[];
   workspaces: Array<{
     id: string;
     name: string;
@@ -86,9 +90,30 @@ type AppSidebarProps = {
   };
 };
 
-export function AppSidebar({ workspaces, activeWorkspaceId, user }: AppSidebarProps) {
+export function AppSidebar({ activeRoles, workspaces, activeWorkspaceId, user }: AppSidebarProps) {
   const pathname = usePathname();
   const activeWorkspace = workspaces.find((workspace) => workspace.id === activeWorkspaceId);
+  const canAccessFinance = activeRoles.some((role) => role === 'owner' || role === 'admin' || role === 'finance');
+
+  const financeNavigation = {
+    title: 'Financeiro',
+    items: [
+      {
+        title: 'Contas a receber',
+        href: '/financeiro/contas-receber',
+        icon: Wallet,
+        locked: !canAccessFinance,
+      },
+      {
+        title: 'Contas a pagar',
+        href: '/financeiro/contas-pagar',
+        icon: Wallet,
+        locked: !canAccessFinance,
+      },
+    ],
+  };
+
+  const navigation = [...baseNavigation, financeNavigation, adminNavigation];
 
   return (
     <Sidebar collapsible="icon" variant="inset">
@@ -117,16 +142,20 @@ export function AppSidebar({ workspaces, activeWorkspaceId, user }: AppSidebarPr
                   const isActive =
                     pathname === item.href ||
                     pathname.startsWith(`${item.href}/`);
+                  const isLocked = Boolean((item as { locked?: boolean }).locked);
+                  const buttonLabel = isLocked ? `${item.title} (bloqueado)` : item.title;
 
                   return (
                     <SidebarMenuItem key={item.href}>
                       <SidebarMenuButton
-                        isActive={isActive}
-                        tooltip={item.title}
-                        render={<Link href={item.href} />}
+                        isActive={!isLocked && isActive}
+                        tooltip={buttonLabel}
+                        aria-disabled={isLocked}
+                        render={!isLocked ? <Link href={item.href} /> : undefined}
                       >
                         <Icon data-icon="inline-start" />
                         <span>{item.title}</span>
+                        {isLocked ? <Lock className="ml-auto size-3.5" /> : null}
                       </SidebarMenuButton>
                     </SidebarMenuItem>
                   );

@@ -49,6 +49,7 @@ export const updateSession = async (request: NextRequest) => {
   const isProtectedPage =
     pathname === "/" ||
     pathname.startsWith("/dev") ||
+    pathname.startsWith("/financeiro") ||
     pathname.startsWith("/boas-vindas") ||
     pathname.startsWith("/onboarding") ||
     pathname.startsWith("/empresa-em-configuracao") ||
@@ -60,6 +61,7 @@ export const updateSession = async (request: NextRequest) => {
     pathname.startsWith("/pedidos");
   const isProtectedApi =
     pathname.startsWith("/api/dashboard") ||
+    pathname.startsWith("/api/finance") ||
     pathname.startsWith("/api/quotes") ||
     pathname.startsWith("/api/companies") ||
     pathname.startsWith("/api/clients") ||
@@ -126,9 +128,18 @@ export const updateSession = async (request: NextRequest) => {
     const activeWorkspaceId = activeMembership?.workspace_id;
     const activeRoles = Array.isArray(activeMembership?.roles) ? activeMembership.roles : [];
     const canConfigureWorkspace = activeRoles.some((role) => role === "owner" || role === "admin");
+    const canAccessFinance = activeRoles.some((role) => role === "owner" || role === "admin" || role === "finance");
 
     if (isWelcomeRoute) {
       return NextResponse.redirect(new URL("/dashboard", request.url));
+    }
+
+    if (pathname.startsWith("/financeiro") && !canAccessFinance) {
+      return NextResponse.redirect(new URL("/dashboard", request.url));
+    }
+
+    if (pathname.startsWith("/api/finance") && !canAccessFinance) {
+      return NextResponse.json({ error: "Sem permissao para acessar financeiro." }, { status: 403 });
     }
 
     if (activeWorkspaceId && activeWorkspaceId !== requestedWorkspaceId) {

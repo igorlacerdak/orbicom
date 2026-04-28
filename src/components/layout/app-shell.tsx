@@ -1,8 +1,6 @@
-import { signOutAction } from '@/app/auth/actions';
 import { AppSidebar } from '@/components/layout/app-sidebar';
 import { WorkspaceSwitcher } from '@/components/layout/workspace-switcher';
 import { ThemeToggle } from '@/components/theme/theme-toggle';
-import { Button } from '@/components/ui/button';
 import { getWorkspaceContext } from '@/server/workspace-context';
 import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 import { createClient } from '@/utils/supabase/server';
@@ -41,10 +39,12 @@ export async function AppShell({ children }: AppShellProps) {
   };
   const displayName =
     metadata.full_name || metadata.name || buildNameFromEmail(email);
+  const activeWorkspace = workspaceContext.workspaces.find((workspace) => workspace.id === workspaceContext.workspaceId);
 
   return (
     <SidebarProvider>
       <AppSidebar
+        activeRoles={workspaceContext.roles}
         workspaces={workspaceContext.workspaces.map((workspace) => ({
           id: workspace.id,
           name: workspace.name,
@@ -59,24 +59,24 @@ export async function AppShell({ children }: AppShellProps) {
       />
       <SidebarInset>
         <header className="sticky top-0 z-10 flex h-14 items-center justify-between rounded-md border-b border-border/80 bg-background/85 px-4 backdrop-blur">
-          <div className="flex items-center gap-2">
+          <div className="flex min-w-0 items-center gap-2">
             <SidebarTrigger />
-            <WorkspaceSwitcher
-              activeWorkspaceId={workspaceContext.workspaceId}
-              workspaces={workspaceContext.workspaces.map((workspace) => ({
-                id: workspace.id,
-                name: workspace.name,
-                slug: workspace.slug,
-              }))}
-            />
+            <p className="truncate text-sm font-medium md:hidden">
+              {activeWorkspace?.name ?? 'Orbicom'}
+            </p>
+            <div className="hidden md:block">
+              <WorkspaceSwitcher
+                activeWorkspaceId={workspaceContext.workspaceId}
+                workspaces={workspaceContext.workspaces.map((workspace) => ({
+                  id: workspace.id,
+                  name: workspace.name,
+                  slug: workspace.slug,
+                }))}
+              />
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <ThemeToggle />
-            <form action={signOutAction}>
-              <Button type="submit" variant="outline" size="sm">
-                Sair
-              </Button>
-            </form>
+          <div className="hidden items-center gap-2 md:flex">
+            <ThemeToggle compact />
           </div>
         </header>
         <div className="flex-1">{children}</div>
