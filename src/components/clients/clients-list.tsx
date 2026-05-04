@@ -2,12 +2,14 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Plus, Search } from "lucide-react";
+import { MoreHorizontal, Pencil, Plus, Search, Trash2 } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { InlineError } from "@/components/ui/inline-feedback";
 import { Input } from "@/components/ui/input";
 import { PageHero } from "@/components/layout/page-hero";
@@ -46,7 +48,11 @@ export function ClientsList() {
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
-  const [createError, setCreateError] = useState("");
+  const [dialogMode, setDialogMode] = useState<"create" | "edit">("create");
+  const [editingClient, setEditingClient] = useState<ClientSummary | null>(null);
+  const [clientToDelete, setClientToDelete] = useState<ClientSummary | null>(null);
+  const [dialogError, setDialogError] = useState("");
+  const [deleteError, setDeleteError] = useState("");
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -93,10 +99,45 @@ export function ClientsList() {
     );
   };
 
-  const createMutation = useMutation({
-    mutationFn: async (payload: ClientInput) => {
-      const response = await fetch("/api/clients", {
-        method: "POST",
+  const applyClientToCache = (nextClient: ClientSummary) => {
+    const cachedEntries = queryClient.getQueriesData<ClientSummary[]>({ queryKey: ["clients"] });
+
+    for (const [queryKey, cachedList] of cachedEntries) {
+      const [, search = ""] = queryKey as [string, string];
+      const currentList = cachedList ?? [];
+      const filtered = currentList.filter((client) => client.id !== nextClient.id);
+
+      if (!clientMatchesSearch(nextClient, search)) {
+        queryClient.setQueryData(queryKey, filtered);
+        continue;
+      }
+
+      queryClient.setQueryData(
+        queryKey,
+        [nextClient, ...filtered].sort((a, b) => a.name.localeCompare(b.name)),
+      );
+    }
+
+    if (cachedEntries.length === 0) {
+      queryClient.setQueryData(queryKeys.clients(""), [nextClient]);
+    }
+  };
+
+  const removeClientFromCache = (clientId: string) => {
+    const cachedEntries = queryClient.getQueriesData<ClientSummary[]>({ queryKey: ["clients"] });
+
+    for (const [queryKey, cachedList] of cachedEntries) {
+      queryClient.setQueryData(
+        queryKey,
+        (cachedList ?? []).filter((client) => client.id !== clientId),
+      );
+    }
+  };
+
+  const saveMutation = useMutation({
+    mutationFn: async ({ payload, clientId }: { payload: ClientInput; clientId?: string }) => {
+      const response = await fetch(clientId ? `/api/clients/${clientId}` : "/api/clients", {
+        method: clientId ? "PUT" : "POST",
         headers: {
           "Content-Type": "application/json",
         },
@@ -111,43 +152,69 @@ export function ClientsList() {
       return body.data;
     },
     onMutate: () => {
-      setCreateError("");
+      setDialogError("");
     },
-    onSuccess: (createdClient) => {
-      const cachedEntries = queryClient.getQueriesData<ClientSummary[]>({ queryKey: ["clients"] });
-
-      for (const [queryKey, cachedList] of cachedEntries) {
-        const [, search = ""] = queryKey as [string, string];
-        const currentList = cachedList ?? [];
-        const filtered = currentList.filter((client) => client.id !== createdClient.id);
-
-        if (!clientMatchesSearch(createdClient, search)) {
-          queryClient.setQueryData(queryKey, filtered);
-          continue;
-        }
-
-        queryClient.setQueryData(
-          queryKey,
-          [createdClient, ...filtered].sort((a, b) => a.name.localeCompare(b.name)),
-        );
-      }
-
-      if (cachedEntries.length === 0) {
-        queryClient.setQueryData(queryKeys.clients(""), [createdClient]);
-      }
-
-      setCreateError("");
-      toast.success("Cliente cadastrado com sucesso.");
+    onSuccess: (savedClient) => {
+      applyClientToCache(savedClient);
+      setIsCreateOpen(false);
+      setEditingClient(null);
+      setDialogError("");
+      toast.success(dialogMode === "edit" ? "Cliente atualizado com sucesso." : "Cliente cadastrado com sucesso.");
     },
     onError: (mutationError) => {
-      const message = mutationError instanceof Error ? mutationError.message : "Falha ao cadastrar cliente.";
-      setCreateError(message);
+      const message = mutationError instanceof Error ? mutationError.message : "Falha ao salvar cliente.";
+      setDialogError(message);
       toast.error(message);
     },
   });
 
-  const handleCreateClient = async (input: ClientInput) => {
-    await createMutation.mutateAsync(input);
+  const deleteMutation = useMutation({
+    mutationFn: async (clientId: string) => {
+      const response = await fetch(`/api/clients/${clientId}`, {
+        method: "DELETE",
+      });
+
+      const body = (await response.json()) as { data?: { id: string }; error?: string };
+      if (!response.ok || !body.data) {
+        throw new Error(body.error ?? "Falha ao excluir cliente.");
+      }
+
+      return body.data;
+    },
+    onMutate: () => {
+      setDeleteError("");
+    },
+    onSuccess: ({ id }) => {
+      removeClientFromCache(id);
+      setClientToDelete(null);
+      toast.success("Cliente excluido com sucesso.");
+    },
+    onError: (mutationError) => {
+      const message = mutationError instanceof Error ? mutationError.message : "Falha ao excluir cliente.";
+      setDeleteError(message);
+      toast.error(message);
+    },
+  });
+
+  const handleCreate = () => {
+    setDialogMode("create");
+    setEditingClient(null);
+    setDialogError("");
+    setIsCreateOpen(true);
+  };
+
+  const handleEdit = (client: ClientSummary) => {
+    setDialogMode("edit");
+    setEditingClient(client);
+    setDialogError("");
+    setIsCreateOpen(true);
+  };
+
+  const handleSaveClient = async (input: ClientInput) => {
+    await saveMutation.mutateAsync({
+      payload: input,
+      clientId: dialogMode === "edit" ? editingClient?.id : undefined,
+    });
   };
 
   return (
@@ -169,7 +236,7 @@ export function ClientsList() {
                 Buscar
               </Button>
             </div>
-            <Button type="button" onClick={() => setIsCreateOpen(true)}>
+            <Button type="button" onClick={handleCreate}>
               <Plus data-icon="inline-start" />
               Novo cliente
             </Button>
@@ -179,16 +246,52 @@ export function ClientsList() {
 
       <CreateClientDialog
         open={isCreateOpen}
+        mode={dialogMode}
+        initialClient={editingClient}
         onOpenChange={(open) => {
           setIsCreateOpen(open);
           if (!open) {
-            setCreateError("");
+            setEditingClient(null);
+            setDialogError("");
           }
         }}
-        onCreate={handleCreateClient}
-        loading={createMutation.isPending}
-        error={createError}
+        onSubmit={handleSaveClient}
+        loading={saveMutation.isPending}
+        error={dialogError}
       />
+
+      <Dialog
+        open={Boolean(clientToDelete)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setClientToDelete(null);
+            setDeleteError("");
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Excluir cliente</DialogTitle>
+            <DialogDescription>
+              Confirme a exclusao de {clientToDelete?.name}. Essa acao remove o cadastro e o endereco principal.
+            </DialogDescription>
+          </DialogHeader>
+          {deleteError ? <InlineError message={deleteError} compact /> : null}
+          <DialogFooter>
+            <Button type="button" variant="outline" disabled={deleteMutation.isPending} onClick={() => setClientToDelete(null)}>
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={!clientToDelete || deleteMutation.isPending}
+              onClick={() => clientToDelete && deleteMutation.mutate(clientToDelete.id)}
+            >
+              {deleteMutation.isPending ? "Excluindo..." : "Excluir cliente"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Card className="border-border/70 bg-card/95 shadow-sm">
         <CardHeader>
@@ -215,6 +318,7 @@ export function ClientsList() {
                 <TableHead>Cidade/UF</TableHead>
                 <TableHead>Telefone</TableHead>
                 <TableHead>Atualizado</TableHead>
+                <TableHead className="text-right">Acoes</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -226,6 +330,7 @@ export function ClientsList() {
                       <TableCell><Skeleton className="h-4 w-28" /></TableCell>
                       <TableCell><Skeleton className="h-4 w-28" /></TableCell>
                       <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+                      <TableCell className="text-right"><Skeleton className="ml-auto h-8 w-10" /></TableCell>
                     </TableRow>
                   ))
                 : null}
@@ -237,6 +342,29 @@ export function ClientsList() {
                       <TableCell>{`${client.city} - ${client.state}`}</TableCell>
                       <TableCell>{client.phone}</TableCell>
                       <TableCell>{formatDate(client.updatedAt)}</TableCell>
+                      <TableCell className="text-right">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger
+                            render={
+                              <Button type="button" size="icon-sm" variant="ghost" aria-label={`Acoes para ${client.name}`}>
+                                <MoreHorizontal />
+                              </Button>
+                            }
+                          />
+                          <DropdownMenuContent align="end" className="w-40">
+                            <DropdownMenuGroup>
+                              <DropdownMenuItem onClick={() => handleEdit(client)}>
+                                <Pencil />
+                                Editar
+                              </DropdownMenuItem>
+                              <DropdownMenuItem variant="destructive" onClick={() => setClientToDelete(client)}>
+                                <Trash2 />
+                                Excluir
+                              </DropdownMenuItem>
+                            </DropdownMenuGroup>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
                     </TableRow>
                   ))
                 : null}

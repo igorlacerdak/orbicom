@@ -1,11 +1,22 @@
-'use client';
+"use client";
 
-import { ChangeEvent, useCallback, useEffect, useRef, useState } from 'react';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { FieldErrors, useForm } from 'react-hook-form';
-import { toast } from 'sonner';
+import { useEffect, useState } from "react";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { type FieldErrors, useForm } from "react-hook-form";
+import { toast } from "sonner";
 
-import { clientSchema, type ClientInput } from '@/domain/client.schema';
+import { ClientAddressFields } from "@/components/clients/client-address-fields";
+import { ClientDataFields } from "@/components/clients/client-data-fields";
+import {
+  ClientDialogTabs,
+  type ClientDialogTab,
+} from "@/components/clients/client-dialog-tabs";
+import {
+  defaultClientValues,
+  getClientFormValues,
+} from "@/components/clients/client-form-values";
+import { useClientCepLookup } from "@/components/clients/use-client-cep-lookup";
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -13,248 +24,100 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
-import {
-  Field,
-  FieldContent,
-  FieldError,
-  FieldGroup,
-  FieldLabel,
-} from '@/components/ui/field';
-import { InlineError, InlineInfo } from '@/components/ui/inline-feedback';
-import { Input } from '@/components/ui/input';
-import {
-  formatCep,
-  formatCpfCnpj,
-  formatPhoneBr,
-  formatStateCode,
-} from '@/lib/masks';
+} from "@/components/ui/dialog";
+import { InlineError, InlineInfo } from "@/components/ui/inline-feedback";
+import { clientSchema, type ClientInput } from "@/domain/client.schema";
+import type { ClientSummary } from "@/server/client-service";
 
 type CreateClientDialogProps = {
   open: boolean;
+  mode?: "create" | "edit";
+  initialClient?: ClientSummary | null;
   onOpenChange: (open: boolean) => void;
-  onCreate: (input: ClientInput) => Promise<void>;
+  onSubmit: (input: ClientInput) => Promise<void>;
   loading: boolean;
   error?: string;
 };
 
-const defaultValues: ClientInput = {
-  name: '',
-  document: '',
-  stateRegistration: '',
-  phone: '',
-  address: {
-    street: '',
-    number: '',
-    complement: '',
-    district: '',
-    zipCode: '',
-    city: '',
-    state: '',
-    country: 'Brasil',
-  },
-};
-
 export function CreateClientDialog({
   open,
+  mode = "create",
+  initialClient = null,
   onOpenChange,
-  onCreate,
+  onSubmit,
   loading,
   error,
 }: CreateClientDialogProps) {
-  const [activeTab, setActiveTab] = useState<'dados' | 'endereco'>('dados');
-  const [isCepLoading, setIsCepLoading] = useState(false);
-  const [cepLookupError, setCepLookupError] = useState('');
-  const [cepLookupSuccess, setCepLookupSuccess] = useState('');
-  const [submitFeedback, setSubmitFeedback] = useState('');
-  const lastLookupCepRef = useRef('');
-  const lastAttemptedCepRef = useRef('');
+  const [activeTab, setActiveTab] = useState<ClientDialogTab>("dados");
+  const [submitFeedback, setSubmitFeedback] = useState("");
   const form = useForm<ClientInput>({
     resolver: zodResolver(clientSchema),
-    defaultValues,
-    mode: 'onTouched',
+    defaultValues: getClientFormValues(initialClient),
+    mode: "onTouched",
   });
+  const {
+    isCepLoading,
+    cepLookupError,
+    cepLookupSuccess,
+    handleLookupCep,
+    clearAddressFields,
+    resetCepLookup,
+  } = useClientCepLookup(form);
 
-  const applyMask = (maskFn: (value: string) => string) => ({
-    onChange: (event: ChangeEvent<HTMLInputElement>) => {
-      event.target.value = maskFn(event.target.value);
-    },
-  });
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    form.reset(getClientFormValues(initialClient));
+    resetCepLookup(initialClient?.address.zipCode);
+  }, [form, initialClient, open, resetCepLookup]);
+
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (!nextOpen) {
+      setActiveTab("dados");
+      setSubmitFeedback("");
+      resetCepLookup();
+    }
+
+    onOpenChange(nextOpen);
+  };
 
   const handleInvalidSubmit = (errors: FieldErrors<ClientInput>) => {
     setSubmitFeedback(
-      'Existem campos obrigatorios pendentes. Revise as abas destacadas.',
+      "Existem campos obrigatorios pendentes. Revise as abas destacadas.",
     );
-    if (errors.address) {
-      setActiveTab('endereco');
-    } else {
-      setActiveTab('dados');
-    }
-    toast.error('Revise os campos obrigatorios para salvar o cliente.');
+    setActiveTab(errors.address ? "endereco" : "dados");
+    toast.error("Revise os campos obrigatorios para salvar o cliente.");
   };
 
   const handleSubmit = form.handleSubmit(async (values) => {
-    setSubmitFeedback('');
-    await onCreate(values);
-    form.reset(defaultValues);
-    setActiveTab('dados');
-    setCepLookupError('');
-    setCepLookupSuccess('');
-    lastLookupCepRef.current = '';
-    lastAttemptedCepRef.current = '';
-    onOpenChange(false);
+    setSubmitFeedback("");
+    await onSubmit(values);
+    form.reset(defaultClientValues);
+    setActiveTab("dados");
+    resetCepLookup();
+    handleOpenChange(false);
   }, handleInvalidSubmit);
 
   const hasDadosErrors = Boolean(
     form.formState.errors.name ||
-    form.formState.errors.document ||
-    form.formState.errors.phone,
+      form.formState.errors.document ||
+      form.formState.errors.phone,
   );
   const hasEnderecoErrors = Boolean(form.formState.errors.address);
 
-  const handleLookupCep = useCallback(
-    async (forcedCep?: string) => {
-      const zipCode = forcedCep ?? form.getValues('address.zipCode');
-      const normalized = zipCode.replace(/\D/g, '');
-
-      if (normalized.length !== 8) {
-        return;
-      }
-
-      lastAttemptedCepRef.current = normalized;
-
-      setIsCepLoading(true);
-      setCepLookupError('');
-      setCepLookupSuccess('');
-
-      try {
-        const response = await fetch(`/api/cep/${normalized}`);
-        const payload = (await response.json()) as {
-          data?: {
-            street: string;
-            complement: string;
-            district: string;
-            city: string;
-            state: string;
-          };
-          error?: string;
-        };
-
-        if (!response.ok || !payload.data) {
-          throw new Error(payload.error ?? 'Falha ao consultar CEP.');
-        }
-
-        const current = form.getValues('address');
-        form.setValue('address.street', current.street || payload.data.street, {
-          shouldDirty: true,
-          shouldValidate: true,
-        });
-        form.setValue(
-          'address.complement',
-          current.complement || payload.data.complement,
-          { shouldDirty: true, shouldValidate: true },
-        );
-        form.setValue(
-          'address.district',
-          current.district || payload.data.district,
-          { shouldDirty: true, shouldValidate: true },
-        );
-        form.setValue('address.city', current.city || payload.data.city, {
-          shouldDirty: true,
-          shouldValidate: true,
-        });
-        form.setValue('address.state', current.state || payload.data.state, {
-          shouldDirty: true,
-          shouldValidate: true,
-        });
-        lastLookupCepRef.current = normalized;
-        setCepLookupSuccess('CEP encontrado e dados aplicados no endereco.');
-      } catch (lookupError) {
-        setCepLookupError(
-          lookupError instanceof Error
-            ? lookupError.message
-            : 'Falha ao consultar CEP.',
-        );
-      } finally {
-        setIsCepLoading(false);
-      }
-    },
-    [form],
-  );
-
-  const clearAddressFields = () => {
-    form.setValue('address.street', '', {
-      shouldDirty: true,
-      shouldValidate: true,
-    });
-    form.setValue('address.number', '', {
-      shouldDirty: true,
-      shouldValidate: true,
-    });
-    form.setValue('address.complement', '', {
-      shouldDirty: true,
-      shouldValidate: true,
-    });
-    form.setValue('address.district', '', {
-      shouldDirty: true,
-      shouldValidate: true,
-    });
-    form.setValue('address.zipCode', '', {
-      shouldDirty: true,
-      shouldValidate: true,
-    });
-    form.setValue('address.city', '', {
-      shouldDirty: true,
-      shouldValidate: true,
-    });
-    form.setValue('address.state', '', {
-      shouldDirty: true,
-      shouldValidate: true,
-    });
-    form.setValue('address.country', 'Brasil', {
-      shouldDirty: true,
-      shouldValidate: true,
-    });
-    setCepLookupError('');
-    setCepLookupSuccess('');
-    lastLookupCepRef.current = '';
-    lastAttemptedCepRef.current = '';
-  };
-
-  const watchedZipCode = form.watch('address.zipCode');
-
-  useEffect(() => {
-    const normalized = (watchedZipCode ?? '').replace(/\D/g, '');
-
-    if (normalized.length !== 8) {
-      lastAttemptedCepRef.current = '';
-      return;
-    }
-
-    if (
-      normalized === lastLookupCepRef.current ||
-      normalized === lastAttemptedCepRef.current ||
-      isCepLoading
-    ) {
-      return;
-    }
-
-    const timer = window.setTimeout(() => {
-      void handleLookupCep(normalized);
-    }, 350);
-
-    return () => window.clearTimeout(timer);
-  }, [watchedZipCode, isCepLoading, handleLookupCep]);
-
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-h-[90vh] sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Novo cliente</DialogTitle>
+          <DialogTitle>
+            {mode === "edit" ? "Editar cliente" : "Novo cliente"}
+          </DialogTitle>
           <DialogDescription>
-            Preencha os dados comerciais para cadastrar o cliente no workspace
-            atual.
+            {mode === "edit"
+              ? "Atualize os dados comerciais e endereco principal do cliente."
+              : "Preencha os dados comerciais para cadastrar o cliente no workspace atual."}
           </DialogDescription>
         </DialogHeader>
 
@@ -262,233 +125,22 @@ export function CreateClientDialog({
           onSubmit={handleSubmit}
           className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden"
         >
-          <div className="inline-flex rounded-lg border border-border p-1">
-            <Button
-              type="button"
-              size="sm"
-              variant={activeTab === 'dados' ? 'default' : 'ghost'}
-              onClick={() => setActiveTab('dados')}
-            >
-              Dados{hasDadosErrors ? ' • erro' : ''}
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant={activeTab === 'endereco' ? 'default' : 'ghost'}
-              onClick={() => setActiveTab('endereco')}
-            >
-              Endereco{hasEnderecoErrors ? ' • erro' : ''}
-            </Button>
-          </div>
+          <ClientDialogTabs
+            activeTab={activeTab}
+            hasDadosErrors={hasDadosErrors}
+            hasEnderecoErrors={hasEnderecoErrors}
+            onTabChange={setActiveTab}
+          />
 
           <div className="min-h-0 flex-1 overflow-y-auto pr-1">
-            {activeTab === 'dados' ? (
-              <FieldGroup
-                key="tab-dados"
-                className="grid gap-4 md:grid-cols-2 pb-1"
-              >
-                <Field className="md:col-span-2">
-                  <FieldLabel htmlFor="client-name">
-                    Nome / Razao social
-                  </FieldLabel>
-                  <FieldContent>
-                    <Input
-                      id="client-name"
-                      autoComplete="name"
-                      {...form.register('name')}
-                    />
-                    <FieldError>
-                      {form.formState.errors.name?.message}
-                    </FieldError>
-                  </FieldContent>
-                </Field>
-
-                <Field>
-                  <FieldLabel htmlFor="client-document">CPF/CNPJ</FieldLabel>
-                  <FieldContent>
-                    <Input
-                      id="client-document"
-                      inputMode="numeric"
-                      autoComplete="off"
-                      placeholder="00.000.000/0000-00"
-                      {...form.register('document', applyMask(formatCpfCnpj))}
-                    />
-                    <FieldError>
-                      {form.formState.errors.document?.message}
-                    </FieldError>
-                  </FieldContent>
-                </Field>
-
-                <Field>
-                  <FieldLabel htmlFor="client-state-registration">
-                    Inscricao estadual
-                  </FieldLabel>
-                  <FieldContent>
-                    <Input
-                      id="client-state-registration"
-                      autoComplete="off"
-                      {...form.register('stateRegistration')}
-                    />
-                  </FieldContent>
-                </Field>
-
-                <Field>
-                  <FieldLabel htmlFor="client-phone">Telefone</FieldLabel>
-                  <FieldContent>
-                    <Input
-                      id="client-phone"
-                      inputMode="tel"
-                      autoComplete="tel"
-                      placeholder="(00) 00000-0000"
-                      {...form.register('phone', applyMask(formatPhoneBr))}
-                    />
-                    <FieldError>
-                      {form.formState.errors.phone?.message}
-                    </FieldError>
-                  </FieldContent>
-                </Field>
-              </FieldGroup>
+            {activeTab === "dados" ? (
+              <ClientDataFields form={form} />
             ) : (
-              <FieldGroup
-                key="tab-endereco"
-                className="grid gap-4 md:grid-cols-2 pb-1"
-              >
-                <Field>
-                  <FieldLabel htmlFor="client-zip">CEP</FieldLabel>
-                  <FieldContent>
-                    <Input
-                      id="client-zip"
-                      inputMode="numeric"
-                      autoComplete="postal-code"
-                      placeholder="00000-000"
-                      {...form.register('address.zipCode', {
-                        ...applyMask(formatCep),
-                        onBlur: async () => {
-                          await handleLookupCep();
-                        },
-                      })}
-                    />
-                    <FieldError>
-                      {form.formState.errors.address?.zipCode?.message}
-                    </FieldError>
-                  </FieldContent>
-                </Field>
-
-                <div className="flex items-end gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    disabled={isCepLoading}
-                    onClick={() => void handleLookupCep()}
-                  >
-                    {isCepLoading ? 'Buscando CEP...' : 'Buscar CEP'}
-                  </Button>
-                </div>
-
-                <Field className="md:col-span-2">
-                  <FieldLabel htmlFor="client-address">
-                    Rua / Endereco
-                  </FieldLabel>
-                  <FieldContent>
-                    <Input
-                      id="client-address"
-                      autoComplete="address-line1"
-                      {...form.register('address.street')}
-                    />
-                    <FieldError>
-                      {form.formState.errors.address?.street?.message}
-                    </FieldError>
-                  </FieldContent>
-                </Field>
-
-                <Field>
-                  <FieldLabel htmlFor="client-number">Numero</FieldLabel>
-                  <FieldContent>
-                    <Input
-                      id="client-number"
-                      autoComplete="off"
-                      {...form.register('address.number')}
-                    />
-                    <FieldError>
-                      {form.formState.errors.address?.number?.message}
-                    </FieldError>
-                  </FieldContent>
-                </Field>
-
-                <Field>
-                  <FieldLabel htmlFor="client-complement">
-                    Complemento
-                  </FieldLabel>
-                  <FieldContent>
-                    <Input
-                      id="client-complement"
-                      autoComplete="address-line2"
-                      {...form.register('address.complement')}
-                    />
-                  </FieldContent>
-                </Field>
-
-                <Field className="md:col-span-2">
-                  <FieldLabel htmlFor="client-district">Bairro</FieldLabel>
-                  <FieldContent>
-                    <Input
-                      id="client-district"
-                      autoComplete="address-level3"
-                      {...form.register('address.district')}
-                    />
-                    <FieldError>
-                      {form.formState.errors.address?.district?.message}
-                    </FieldError>
-                  </FieldContent>
-                </Field>
-
-                <Field>
-                  <FieldLabel htmlFor="client-city">Cidade</FieldLabel>
-                  <FieldContent>
-                    <Input
-                      id="client-city"
-                      autoComplete="address-level2"
-                      {...form.register('address.city')}
-                    />
-                    <FieldError>
-                      {form.formState.errors.address?.city?.message}
-                    </FieldError>
-                  </FieldContent>
-                </Field>
-
-                <Field>
-                  <FieldLabel htmlFor="client-state">UF</FieldLabel>
-                  <FieldContent>
-                    <Input
-                      id="client-state"
-                      maxLength={2}
-                      autoComplete="address-level1"
-                      placeholder="MG"
-                      {...form.register(
-                        'address.state',
-                        applyMask(formatStateCode),
-                      )}
-                    />
-                    <FieldError>
-                      {form.formState.errors.address?.state?.message}
-                    </FieldError>
-                  </FieldContent>
-                </Field>
-
-                <Field>
-                  <FieldLabel htmlFor="client-country">Pais</FieldLabel>
-                  <FieldContent>
-                    <Input
-                      id="client-country"
-                      autoComplete="country-name"
-                      {...form.register('address.country')}
-                    />
-                    <FieldError>
-                      {form.formState.errors.address?.country?.message}
-                    </FieldError>
-                  </FieldContent>
-                </Field>
-              </FieldGroup>
+              <ClientAddressFields
+                form={form}
+                isCepLoading={isCepLoading}
+                onLookupCep={handleLookupCep}
+              />
             )}
 
             {error ? (
@@ -524,7 +176,7 @@ export function CreateClientDialog({
             <Button
               type="button"
               variant="outline"
-              onClick={() => onOpenChange(false)}
+              onClick={() => handleOpenChange(false)}
               disabled={loading}
             >
               Cancelar
@@ -533,7 +185,11 @@ export function CreateClientDialog({
               type="submit"
               disabled={loading || form.formState.isSubmitting}
             >
-              {loading ? 'Salvando...' : 'Salvar cliente'}
+              {loading
+                ? "Salvando..."
+                : mode === "edit"
+                  ? "Atualizar cliente"
+                  : "Salvar cliente"}
             </Button>
           </DialogFooter>
         </form>
