@@ -1,10 +1,11 @@
 import Link from "next/link";
 
 import { signInAction } from "@/app/auth/actions";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, FieldContent, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
 
 type PageProps = {
   searchParams: Promise<{
@@ -52,6 +53,13 @@ export default async function LoginPage({ searchParams }: PageProps) {
             <Button type="submit" className="w-full">
               Entrar
             </Button>
+
+            <Link
+              href={`/auth/login/google?next=${encodeURIComponent(next ?? "/dashboard")}`}
+              className={cn(buttonVariants({ variant: "outline" }), "w-full")}
+            >
+              Continuar com Google
+            </Link>
           </form>
 
           <p className="mt-4 text-center text-sm text-muted-foreground">

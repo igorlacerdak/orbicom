@@ -1,6 +1,7 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 
 import { ForbiddenError, UnauthorizedError } from "@/server/errors";
+import { sendWorkspaceInviteEmail } from "@/server/email/workspace-invite-email";
 import { getWorkspaceContext, hasAnyRole } from "@/server/workspace-context";
 import type { WorkspaceRole } from "@/server/workspace-context";
 import { createClient } from "@/utils/supabase/server";
@@ -50,6 +51,8 @@ const assertCanManageAccess = (roles: WorkspaceRole[]) => {
 };
 
 const normalizeEmail = (value: string) => value.trim().toLowerCase();
+
+const getTokenHash = (token: string) => createHash("sha256").update(token).digest("hex");
 
 const slugify = (value: string) =>
   value
@@ -229,7 +232,17 @@ export const workspaceService = {
 
     const expiresInDays = Math.max(1, Math.min(input.expiresInDays ?? 7, 30));
     const expiresAt = new Date(Date.now() + expiresInDays * 24 * 60 * 60 * 1000).toISOString();
-    const token = randomUUID();
+    const token = randomBytes(32).toString("hex");
+    const tokenHash = getTokenHash(token);
+    const workspaceName =
+      context.workspaces.find((workspace) => workspace.id === context.workspaceId)?.name ?? "Workspace";
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL;
+
+    if (!appUrl) {
+      throw new Error("Env NEXT_PUBLIC_APP_URL nao configurada para envio de convite.");
+    }
+
+    const inviteUrl = `${appUrl}/auth/invite/accept?token=${encodeURIComponent(token)}`;
 
     const { data, error } = await supabase
       .from("workspace_invites")
@@ -237,7 +250,8 @@ export const workspaceService = {
         workspace_id: context.workspaceId,
         email,
         roles: ["operator"],
-        token,
+        token_hash: tokenHash,
+        token: null,
         status: "pending",
         expires_at: expiresAt,
         invited_by: context.userId,
@@ -247,6 +261,28 @@ export const workspaceService = {
 
     if (error) {
       throw new Error(`Falha ao criar convite: ${error.message}`);
+    }
+
+    try {
+      await sendWorkspaceInviteEmail({
+        to: email,
+        workspaceName,
+        inviteUrl,
+        inviteToken: token,
+        expiresAtIso: expiresAt,
+      });
+    } catch (emailError) {
+      await supabase
+        .from("workspace_invites")
+        .update({ status: "cancelled", updated_at: new Date().toISOString() })
+        .eq("id", data.id)
+        .eq("workspace_id", context.workspaceId);
+
+      throw new Error(
+        emailError instanceof Error
+          ? emailError.message
+          : "Falha ao enviar convite por e-mail.",
+      );
     }
 
     return {

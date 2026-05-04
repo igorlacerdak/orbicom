@@ -147,7 +147,7 @@ export function AccessControlPanel() {
         throw new Error(payload.error ?? "Falha ao criar convite.");
       }
 
-      toast.success(`Convite criado para ${payload.data.email}.`);
+      toast.success(`Convite enviado por e-mail para ${payload.data.email}.`);
       setInviteEmail("");
       await loadData({ withLoadingState: false });
     } catch (createError) {

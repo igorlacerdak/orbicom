@@ -14,6 +14,12 @@ type ClientSummary = {
   updatedAt: string;
 };
 
+type ClientAddressRow = {
+  city: string;
+  state: string;
+  is_primary: boolean;
+};
+
 const normalize = (value: string) => value.trim();
 
 export const clientService = {
@@ -25,7 +31,7 @@ export const clientService = {
 
     let builder = supabase
       .from("clients")
-      .select("id,name,document,phone,city,state,updated_at")
+      .select("id,name,document,phone,city,state,updated_at,client_addresses(city,state,is_primary)")
       .eq("workspace_id", workspace.workspaceId)
       .order("name", { ascending: true })
       .limit(200);
@@ -45,8 +51,14 @@ export const clientService = {
       name: row.name,
       document: row.document,
       phone: row.phone,
-      city: row.city,
-      state: row.state,
+      city:
+        (Array.isArray(row.client_addresses)
+          ? (row.client_addresses as ClientAddressRow[]).find((address) => address.is_primary)?.city
+          : undefined) ?? row.city,
+      state:
+        (Array.isArray(row.client_addresses)
+          ? (row.client_addresses as ClientAddressRow[]).find((address) => address.is_primary)?.state
+          : undefined) ?? row.state,
       updatedAt: row.updated_at,
     }));
   },
@@ -66,10 +78,10 @@ export const clientService = {
       document: input.document.trim(),
       state_registration: input.stateRegistration?.trim() ?? "",
       phone: input.phone.trim(),
-      address: input.address.trim(),
-      zip_code: input.zipCode.trim(),
-      city: input.city.trim(),
-      state: input.state.trim(),
+      address: input.address.street.trim(),
+      zip_code: input.address.zipCode.trim(),
+      city: input.address.city.trim(),
+      state: input.address.state.trim(),
     };
 
     const { data, error } = await supabase
@@ -84,6 +96,26 @@ export const clientService = {
       }
 
       throw new Error(`Falha ao cadastrar cliente: ${error.message}`);
+    }
+
+    const { error: addressError } = await supabase.from("client_addresses").insert({
+      owner_id: workspace.userId,
+      workspace_id: workspace.workspaceId,
+      client_id: data.id,
+      label: "principal",
+      street: input.address.street.trim(),
+      number: input.address.number.trim(),
+      complement: input.address.complement.trim(),
+      district: input.address.district.trim(),
+      city: input.address.city.trim(),
+      state: input.address.state.trim(),
+      zip_code: input.address.zipCode.trim(),
+      country: input.address.country.trim(),
+      is_primary: true,
+    });
+
+    if (addressError) {
+      throw new Error(`Cliente criado, mas falhou ao salvar endereco: ${addressError.message}`);
     }
 
     return {

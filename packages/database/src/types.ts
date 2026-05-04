@@ -71,6 +71,46 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["clients"]["Insert"]>;
         Relationships: [];
       };
+      client_addresses: {
+        Row: {
+          id: string;
+          owner_id: string;
+          workspace_id: string;
+          client_id: string;
+          label: string;
+          street: string;
+          number: string;
+          complement: string;
+          district: string;
+          city: string;
+          state: string;
+          zip_code: string;
+          country: string;
+          is_primary: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          owner_id: string;
+          workspace_id: string;
+          client_id: string;
+          label?: string;
+          street: string;
+          number?: string;
+          complement?: string;
+          district?: string;
+          city: string;
+          state: string;
+          zip_code: string;
+          country?: string;
+          is_primary?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["client_addresses"]["Insert"]>;
+        Relationships: [];
+      };
       quotes: {
         Row: {
           id: string;
@@ -233,7 +273,8 @@ export type Database = {
           workspace_id: string;
           email: string;
           roles: string[];
-          token: string;
+          token: string | null;
+          token_hash: string;
           status: "pending" | "accepted" | "expired" | "cancelled";
           expires_at: string;
           invited_by: string | null;
@@ -247,7 +288,8 @@ export type Database = {
           workspace_id: string;
           email: string;
           roles?: string[];
-          token: string;
+          token?: string | null;
+          token_hash: string;
           status?: "pending" | "accepted" | "expired" | "cancelled";
           expires_at: string;
           invited_by?: string | null;
