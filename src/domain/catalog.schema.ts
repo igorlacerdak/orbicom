@@ -12,4 +12,14 @@ export const catalogItemSchema = z.object({
   active: z.boolean(),
 });
 
+export const catalogImportItemSchema = catalogItemSchema.extend({
+  code: z.string().optional(),
+});
+
+export const catalogImportSchema = z.object({
+  items: z.array(catalogImportItemSchema).min(1, "Informe ao menos um item"),
+});
+
 export type CatalogItemInput = z.infer<typeof catalogItemSchema>;
+export type CatalogImportItemInput = z.infer<typeof catalogImportItemSchema>;
+export type CatalogImportInput = z.infer<typeof catalogImportSchema>;

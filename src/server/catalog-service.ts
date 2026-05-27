@@ -1,6 +1,7 @@
-import { CatalogItemInput } from "@/domain/catalog.schema";
+import { CatalogImportItemInput, CatalogItemInput } from "@/domain/catalog.schema";
 import { CatalogItem, CatalogItemType } from "@/domain/catalog.types";
 import { ForbiddenError } from "@/server/errors";
+import { buildIlikeOrFilter } from "@/server/supabase-filters";
 import { getWorkspaceContext, hasAnyRole } from "@/server/workspace-context";
 import { createClient } from "@/utils/supabase/server";
 
@@ -33,6 +34,12 @@ const mapItem = (row: CatalogRow): CatalogItem => ({
   createdAt: row.created_at,
   updatedAt: row.updated_at,
 });
+
+const buildImportCode = (index: number) => {
+  const stamp = new Date().toISOString().replace(/\D/g, "").slice(0, 14);
+  const suffix = crypto.randomUUID().slice(0, 8).toUpperCase();
+  return `IMP-${stamp}-${String(index + 1).padStart(4, "0")}-${suffix}`;
+};
 
 const getWorkspaceSupabase = async () => {
   const supabase = await createClient();
@@ -92,7 +99,7 @@ export const catalogService = {
     }
     if (filters?.q && filters.q.trim()) {
       const q = filters.q.trim();
-      query = query.or(`code.ilike.%${q}%,name.ilike.%${q}%`);
+      query = query.or(buildIlikeOrFilter(["code", "name"], q));
     }
     if (typeof filters?.minPrice === "number" && Number.isFinite(filters.minPrice)) {
       query = query.gte("default_unit_price", filters.minPrice);
@@ -141,6 +148,43 @@ export const catalogService = {
     }
 
     return mapItem(data as CatalogRow);
+  },
+
+  async importBatch(items: CatalogImportItemInput[]): Promise<{
+    imported: number;
+    items: CatalogItem[];
+  }> {
+    const { supabase, workspace } = await getWorkspaceSupabase();
+    if (!hasAnyRole(workspace.roles, ["owner", "admin", "operator"])) {
+      throw new ForbiddenError("Apenas owner/admin/operator podem importar o catalogo.");
+    }
+
+    const rows = items.map((item, index) => ({
+      owner_id: workspace.userId,
+      workspace_id: workspace.workspaceId,
+      code: item.code?.trim() || buildImportCode(index),
+      name: item.name.trim(),
+      type: item.type,
+      unit: item.unit,
+      default_unit_price: item.defaultUnitPrice,
+      allow_custom_description: item.allowCustomDescription,
+      active: item.active,
+      updated_at: new Date().toISOString(),
+    }));
+
+    const { data, error } = await supabase
+      .from("catalog_items")
+      .upsert(rows, { onConflict: "workspace_id,code" })
+      .select(columns);
+
+    if (error) {
+      throw new Error(`Falha ao importar catalogo: ${error.message}`);
+    }
+
+    return {
+      imported: data?.length ?? 0,
+      items: ((data as CatalogRow[] | null) ?? []).map(mapItem),
+    };
   },
 
   async update(id: string, input: CatalogItemInput): Promise<CatalogItem> {

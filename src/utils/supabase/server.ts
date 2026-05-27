@@ -1,19 +1,19 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
-
-if (!supabaseUrl || !supabaseKey) {
-  throw new Error(
-    "Configure NEXT_PUBLIC_SUPABASE_URL e NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY no ambiente.",
-  );
-}
+import {
+  createSupabaseFetch,
+  getSupabaseConfig,
+} from "@/utils/supabase/config";
 
 export const createClient = async () => {
   const cookieStore = await cookies();
+  const { supabaseUrl, supabaseKey } = getSupabaseConfig();
 
   return createServerClient(supabaseUrl, supabaseKey, {
+    global: {
+      fetch: createSupabaseFetch(),
+    },
     cookies: {
       getAll() {
         return cookieStore.getAll();

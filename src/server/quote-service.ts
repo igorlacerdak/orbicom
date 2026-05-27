@@ -2,7 +2,7 @@ import type { Database } from "@repo/database/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { calculateItemTotal, calculateQuoteTotals } from "@/domain/quote.calculations";
-import { defaultClient, defaultCompany } from "@/domain/quote.defaults";
+import { emptyClient, defaultCompany } from "@/domain/quote.defaults";
 import { QuoteFormInput } from "@/domain/quote.schema";
 import { Quote, QuoteStatus } from "@/domain/quote.types";
 import { buildDefaultQuoteNotes } from "@/lib/quote-notes";
@@ -219,9 +219,24 @@ const upsertCompany = async (
     updated_at: new Date().toISOString(),
   };
 
-  const { data, error } = await supabase
+  const { data: existing, error: lookupError } = await supabase
     .from("companies")
-    .upsert(payload, { onConflict: "workspace_id,document" })
+    .select("id")
+    .eq("workspace_id", workspaceId)
+    .eq("document", company.document)
+    .order("updated_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (lookupError) {
+    throw new Error(`Falha ao consultar empresa: ${lookupError.message}`);
+  }
+
+  const query = existing
+    ? supabase.from("companies").update(payload).eq("id", existing.id).eq("workspace_id", workspaceId)
+    : supabase.from("companies").insert(payload);
+
+  const { data, error } = await query
     .select("id")
     .single();
 
@@ -252,9 +267,24 @@ const upsertClient = async (
     updated_at: new Date().toISOString(),
   };
 
-  const { data, error } = await supabase
+  const { data: existing, error: lookupError } = await supabase
     .from("clients")
-    .upsert(payload, { onConflict: "workspace_id,document" })
+    .select("id")
+    .eq("workspace_id", workspaceId)
+    .eq("document", client.document)
+    .order("updated_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (lookupError) {
+    throw new Error(`Falha ao consultar cliente: ${lookupError.message}`);
+  }
+
+  const query = existing
+    ? supabase.from("clients").update(payload).eq("id", existing.id).eq("workspace_id", workspaceId)
+    : supabase.from("clients").insert(payload);
+
+  const { data, error } = await query
     .select("id")
     .single();
 
@@ -482,7 +512,7 @@ export const quoteService = {
         state: settings.companyState || defaultCompany.state,
         logoDataUrl: settings.companyLogoUrl || defaultCompany.logoDataUrl,
       },
-      client: defaultClient,
+      client: emptyClient,
       items: [
         {
           id: crypto.randomUUID(),

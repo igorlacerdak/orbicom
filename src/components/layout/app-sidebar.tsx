@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Activity, BarChart3, Building2, ClipboardList, FileText, Lock, PackageSearch, Settings2, Users, Wallet } from 'lucide-react';
+import { Activity, BarChart3, Building2, ClipboardList, FileText, Lock, PackageSearch, Settings2, ShoppingCart, Users, Wallet } from 'lucide-react';
 
 import { NavUser } from '@/components/layout/nav-user';
 import {
@@ -52,6 +52,16 @@ const baseNavigation = [
         title: 'Pedidos',
         href: '/pedidos',
         icon: ClipboardList,
+      },
+    ],
+  },
+  {
+    title: 'Vendas',
+    items: [
+      {
+        title: 'PDV',
+        href: '/vendas/pdv',
+        icon: ShoppingCart,
       },
     ],
   },

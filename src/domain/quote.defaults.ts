@@ -28,6 +28,17 @@ export const defaultClient: PartyData = {
   state: 'MG',
 };
 
+export const emptyClient: PartyData = {
+  name: '',
+  document: '',
+  stateRegistration: '',
+  phone: '',
+  address: '',
+  zipCode: '',
+  city: '',
+  state: '',
+};
+
 export const defaultItem = (): QuoteItem => ({
   id: crypto.randomUUID(),
   catalogItemId: undefined,
@@ -61,7 +72,7 @@ export const buildDraftQuote = (nextIndex: number): Quote => {
     updatedAt: now,
     issueDate: now,
     company: defaultCompany,
-    client: defaultClient,
+    client: emptyClient,
     items: [defaultItem()],
     adjustments: defaultAdjustments,
     notes: buildDefaultQuoteNotes(0),

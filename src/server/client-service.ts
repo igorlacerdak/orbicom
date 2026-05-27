@@ -1,5 +1,6 @@
 import { ClientInput } from "@/domain/client.schema";
 import { ForbiddenError } from "@/server/errors";
+import { buildIlikeOrFilter } from "@/server/supabase-filters";
 import { hasAnyRole } from "@/server/workspace-context";
 import { createClient } from "@/utils/supabase/server";
 import { getWorkspaceContext } from "@/server/workspace-context";
@@ -88,7 +89,7 @@ export const clientService = {
       .limit(200);
 
     if (query) {
-      builder = builder.or(`name.ilike.%${query}%,document.ilike.%${query}%,city.ilike.%${query}%`);
+      builder = builder.or(buildIlikeOrFilter(["name", "document", "city"], query));
     }
 
     const { data, error } = await builder;

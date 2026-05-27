@@ -22,6 +22,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { ItemsTable } from '@/components/quote/items-table';
 import { LogoUpload } from '@/components/quote/logo-upload';
 import { PartyFields } from '@/components/quote/party-fields';
+import { ClientSelector } from '@/components/quote/client-selector';
 import { QuotePreview } from '@/components/quote/quote-preview';
 import { TotalsCard } from '@/components/quote/totals-card';
 import { queryKeys } from '@/lib/query-keys';
@@ -275,12 +276,7 @@ export const QuoteForm = ({ initialQuote, mode, initialCatalogItems = [] }: Quot
             register={register}
             errors={formState.errors}
           />
-          <PartyFields
-            title="Dados do cliente"
-            scope="client"
-            register={register}
-            errors={formState.errors}
-          />
+          <ClientSelector form={form} errors={formState.errors} />
         </div>
 
         <div>

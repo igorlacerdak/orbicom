@@ -1,11 +1,12 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Plus } from 'lucide-react';
+import { Plus, Upload } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 
 import { UpsertCatalogItemDialog } from '@/components/catalog/upsert-catalog-item-dialog';
+import { ImportCatalogDialog } from '@/components/catalog/import-catalog-dialog';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -126,6 +127,7 @@ export function CatalogManager() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogMode, setDialogMode] = useState<'create' | 'edit'>('create');
   const [editingItem, setEditingItem] = useState<CatalogItem | null>(null);
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [dialogError, setDialogError] = useState('');
   const [toggleError, setToggleError] = useState('');
 
@@ -309,6 +311,14 @@ export function CatalogManager() {
         }}
         onSubmit={handleDialogSubmit}
       />
+      <ImportCatalogDialog
+        open={importDialogOpen}
+        onOpenChange={setImportDialogOpen}
+        onImported={() => {
+          queryClient.invalidateQueries({ queryKey: ['catalog-items'] });
+          void refetch();
+        }}
+      />
 
       <Card className="border-border/70 bg-card/95 shadow-sm">
         <CardHeader>
@@ -317,6 +327,10 @@ export function CatalogManager() {
             <div className="flex items-center gap-2">
               <Button type="button" size="sm" variant="outline" onClick={() => void refetch()}>
                 Atualizar agora
+              </Button>
+              <Button type="button" size="sm" variant="outline" onClick={() => setImportDialogOpen(true)}>
+                <Upload data-icon="inline-start" />
+                Importar
               </Button>
               <Button type="button" size="sm" onClick={handleCreate}>
                 <Plus data-icon="inline-start" />

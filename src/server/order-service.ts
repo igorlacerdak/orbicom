@@ -2,9 +2,11 @@ import type { Database } from "@repo/database/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { OrderUpdateInput } from "@/domain/order.schema";
+import { PdvSaleInput } from "@/domain/pdv.schema";
 import { Order, OrderPaymentMethod } from "@/domain/order.types";
 import { financeService } from "@/server/finance-service";
 import { ForbiddenError } from "@/server/errors";
+import { settingsService } from "@/server/settings-service";
 import { hasAnyRole } from "@/server/workspace-context";
 import { getWorkspaceContext } from "@/server/workspace-context";
 import { createClient } from "@/utils/supabase/server";
@@ -91,12 +93,13 @@ const mapParty = (row: PartyRow) => ({
 
 const getWorkspaceSupabase = async (): Promise<{
   supabase: DbClient;
+  userId: string;
   workspaceId: string;
   roles: Array<"owner" | "admin" | "operator" | "finance">;
 }> => {
   const supabase = await createClient();
   const workspace = await getWorkspaceContext();
-  return { supabase, workspaceId: workspace.workspaceId, roles: workspace.roles };
+  return { supabase, userId: workspace.userId, workspaceId: workspace.workspaceId, roles: workspace.roles };
 };
 
 const assertOrderEditorRole = (roles: Array<"owner" | "admin" | "operator" | "finance">) => {
@@ -335,6 +338,148 @@ export const orderService = {
     ]);
 
     return order;
+  },
+
+  async createFromPdv(input: PdvSaleInput): Promise<Order> {
+    const { supabase, userId, workspaceId, roles } = await getWorkspaceSupabase();
+    assertOrderEditorRole(roles);
+
+    const settings = await settingsService.get();
+    const orderNumber = await settingsService.nextOrderNumber();
+    const today = new Date().toISOString().slice(0, 10);
+    const subtotal = input.items.reduce(
+      (acc, item) => acc + Number(item.quantity) * Number(item.unitPrice),
+      0,
+    );
+    const rawDiscount =
+      input.discountType === "percent"
+        ? subtotal * (Number(input.discountValue) / 100)
+        : Number(input.discountValue);
+    const discountAmount = Math.min(subtotal, Math.max(0, rawDiscount));
+    const total = Math.max(0, subtotal - discountAmount);
+
+    const companyPayload = {
+      owner_id: userId,
+      workspace_id: workspaceId,
+      name: settings.companyName,
+      document: settings.companyDocument,
+      state_registration: settings.companyStateRegistration,
+      phone: settings.companyPhone,
+      address: settings.companyAddress,
+      zip_code: settings.companyZipCode,
+      city: settings.companyCity,
+      state: settings.companyState,
+      logo_url: settings.companyLogoUrl || null,
+      updated_at: new Date().toISOString(),
+    };
+
+    const { data: existingCompany, error: companyLookupError } = await supabase
+      .from("companies")
+      .select("id")
+      .eq("workspace_id", workspaceId)
+      .eq("document", settings.companyDocument)
+      .order("updated_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (companyLookupError) {
+      throw new Error(`Falha ao consultar empresa da venda: ${companyLookupError.message}`);
+    }
+
+    const companyQuery = existingCompany
+      ? supabase.from("companies").update(companyPayload).eq("id", existingCompany.id).eq("workspace_id", workspaceId)
+      : supabase.from("companies").insert(companyPayload);
+
+    const { data: company, error: companyError } = await companyQuery
+      .select("id")
+      .single();
+
+    if (companyError) {
+      throw new Error(`Falha ao preparar empresa da venda: ${companyError.message}`);
+    }
+
+    const { data: client, error: clientError } = await supabase
+      .from("clients")
+      .select("id")
+      .eq("id", input.clientId)
+      .eq("workspace_id", workspaceId)
+      .single();
+
+    if (clientError || !client) {
+      throw new Error("Cliente selecionado nao encontrado no workspace.");
+    }
+
+    const { data: order, error: orderError } = await supabase
+      .from("orders")
+      .insert({
+        owner_id: userId,
+        workspace_id: workspaceId,
+        order_number: orderNumber,
+        issue_date: today,
+        company_id: company.id,
+        client_id: input.clientId,
+        source_quote_id: null,
+        status: "awaiting_billing",
+        payment_method: input.paymentMethod,
+        receivable_installments_count: 1,
+        receivable_first_due_days: 0,
+        receivable_interval_days: 30,
+        subtotal,
+        discount_amount: discountAmount,
+        freight: 0,
+        tax_amount: 0,
+        total,
+        notes: input.notes,
+      })
+      .select("id")
+      .single();
+
+    if (orderError) {
+      throw new Error(`Falha ao registrar venda: ${orderError.message}`);
+    }
+
+    const itemRows = input.items.map((item, index) => ({
+      order_id: order.id,
+      code: item.code,
+      name: item.name,
+      unit: item.unit,
+      quantity: item.quantity,
+      unit_price: item.unitPrice,
+      line_total: Number(item.quantity) * Number(item.unitPrice),
+      position: index,
+    }));
+
+    const { error: itemsError } = await supabase.from("order_items").insert(itemRows);
+    if (itemsError) {
+      throw new Error(`Venda criada, mas falhou ao salvar itens: ${itemsError.message}`);
+    }
+
+    const [createdOrder] = await buildOrders(supabase, [
+      {
+        id: order.id,
+        workspace_id: workspaceId,
+        order_number: orderNumber,
+        issue_date: today,
+        company_id: company.id,
+        client_id: input.clientId,
+        source_quote_id: null,
+        status: "awaiting_billing",
+        payment_method: input.paymentMethod,
+        receivable_installments_count: 1,
+        receivable_first_due_days: 0,
+        receivable_interval_days: 30,
+        subtotal,
+        discount_amount: discountAmount,
+        freight: 0,
+        tax_amount: 0,
+        total,
+        notes: input.notes,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      },
+    ]);
+
+    return createdOrder;
   },
 
   async bill(id: string): Promise<Order> {
